@@ -1,0 +1,161 @@
+# knots-datum-node
+
+Run your own Bitcoin node and DATUM gateway, so the blocks your miners work
+on are built by your node, not by a pool.
+
+It runs as an ordinary user. The only steps that need an administrator are
+listed up front, and the script tells you if any are missing.
+
+## Which setup is right for you
+
+- **You bought an ASIC miner and it is at your home.** Run this on a computer
+  at home that stays on. Your miner connects to it over your home network.
+  Nothing is exposed to the internet.
+- **You rent hashpower.** The rental service connects to your gateway from the
+  internet, so run this on a rented server. (A home computer also works if you
+  can forward a port on your router, but a server is simpler.)
+
+## What you need
+
+- A computer running Linux with systemd: Debian, Ubuntu, Fedora, Arch,
+  openSUSE and their relatives all work. 4 GB of memory and 60 GB of free disk
+  is comfortable; 2 GB and 40 GB is the minimum.
+- For a rented server, read "Choosing a server" below first.
+- A Bitcoin address for your rewards.
+
+## Step 1: administrator setup
+
+These are the only commands that need `sudo`. On Debian or Ubuntu:
+
+    sudo apt-get update
+    sudo apt-get install -y git curl gnupg ca-certificates python3 iproute2 build-essential cmake pkgconf libcurl4-openssl-dev libjansson-dev libsodium-dev libmicrohttpd-dev
+    sudo useradd --create-home --shell /bin/bash miner
+    sudo loginctl enable-linger miner
+    sudo -iu miner
+
+The first two lines install what the node and gateway are built from. The
+next two create an account called `miner` that runs everything, and let its
+programs keep running after you log out. The last one switches to that
+account. On other distributions, skip the two install lines: the script
+prints the right ones for your system in step 4.
+
+## Step 2: download it and check the signature
+
+As the `miner` user:
+
+    git clone https://github.com/jasonsopko/knots-datum-node installer
+    cd installer
+    gpg --keyserver hkps://keys.openpgp.org --recv-keys 89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA
+    git verify-tag v0.1.0
+    git checkout v0.1.0
+
+`git verify-tag` must say `Good signature from "Jason Sopko"`, with key
+`89F0 E41D 72CE 523F 4AA1  CDB6 92CD FFB7 C40C D1BA`. The same key is at
+https://github.com/jasonsopko.gpg.
+
+## Step 3: see what it will do
+
+This changes nothing. It prints every download, file and service the
+install would create:
+
+    ./install.sh --address YOUR-ADDRESS --mode pool --dry-run
+
+Replace `YOUR-ADDRESS` with your Bitcoin address. "Pool or solo" below
+explains `--mode`.
+
+## Step 4: install
+
+The same command without `--dry-run`:
+
+    ./install.sh --address YOUR-ADDRESS --mode pool
+
+If anything from step 1 is missing, it stops and prints the exact commands an
+administrator needs to run. It also prints firewall commands; on a home
+computer you can ignore them.
+
+## Step 5: wait for the sync
+
+Your node now downloads and checks the whole chain. That takes most of a
+day. Check on it with:
+
+    ~/knots-datum-node/status
+
+Miners cannot connect until it says `synced`.
+
+## Step 6: point your miners at it
+
+Use the address the install printed at the end. It looks like
+`stratum+tcp://192.168.1.50:23334`.
+
+- **ASIC at home:** open your miner's web page, go to its pool settings, and
+  enter that address as the pool URL. Any worker name, password `x`.
+- **Rented hashpower:** give the rental service
+  `stratum+tcp://YOUR-SERVER-IP:23334` as the pool, with any worker name and
+  password `x`. If your server has a firewall turned on, run the firewall
+  commands the install printed first.
+
+## Pool or solo
+
+- `--mode pool` mines with the CONVOY pool over DATUM. Your node builds the
+  blocks; the pool counts your work and shares out rewards. For a different
+  DATUM pool, add `--pool-host HOST --pool-pubkey KEY` with the values that
+  pool publishes.
+- `--mode solo` pays you the whole reward for any block you find, and nothing
+  otherwise. With a small amount of hashpower that can mean a long wait.
+
+## Choosing a server
+
+Read the provider's terms of service for "mining" and "blockchain" before
+you rent. The gateway hashes nothing, but it hands out mining work, and a
+provider that bans mining can count it. Losing the account takes your node
+with it.
+
+- Hetzner prohibits crypto mining, and their support has said the ban covers
+  node hosting and anything related to mining
+  ([report](https://www.bleepingcomputer.com/news/cryptocurrency/hetzner-cloud-server-provider-bans-cryptocurrency-mining/)).
+  Do not use it for this.
+- DigitalOcean's [acceptable use policy](https://www.digitalocean.com/legal/acceptable-use-policy)
+  prohibits mining without their written permission. Ask them first.
+- Some providers state outright that Bitcoin nodes are allowed. Pick one of
+  those, and keep the page that says so.
+
+Check the monthly transfer allowance too. The first sync downloads several
+hundred GB, and some cheap plans cap transfer at 1 TB or charge for more.
+
+If only your own miners will connect and their address does not change, add
+`--miner-ip THEIR-IP` to the install command, and it prints firewall commands
+that keep everyone else out.
+
+## What gets downloaded, and how it is checked
+
+The script downloads two things and stops unless both check out:
+
+| What | From | Checked by |
+| --- | --- | --- |
+| Bitcoin Knots 29.4.2 | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
+| DATUM gateway source | github.com/CONVOYMining/datum_gateway | Fetched by exact commit, `6ccfbe55a7e7cd6c066aa428e771a37a22e92277`: CONVOY's code plus the fix in CONVOYMining/datum_gateway#18 |
+
+The only other requests are for Luke's public key (from keys.openpgp.org and
+the Knots guix.sigs repository; the fingerprint check is what counts). There
+is no telemetry. `INSTALL.md` walks through the same steps by hand.
+
+## How it is set up
+
+- A pruned Bitcoin Knots node, in `~/knots-datum-node`.
+- The DATUM gateway, limited by systemd: it cannot gain privileges, run
+  unexpected system calls, or use more than 1 GB of memory, and it accepts at
+  most 256 miner connections. Its login to the node can make only the five
+  calls it needs.
+- Both run as user services of the `miner` account, and start again after a
+  reboot.
+
+## Removing it
+
+    ./install.sh --uninstall
+
+This stops and removes everything except the downloaded chain, and prints the
+command to delete that too.
+
+## License
+
+MIT. See `LICENSE`.
