@@ -112,9 +112,25 @@ Use the address the install printed at the end. It looks like
   password `x`. If your server has a firewall turned on, run the firewall
   commands the install printed first.
 
+## Step 7: check your miners on the dashboard
+
+The end of the install, and `~/knots-datum-node/status`, show the
+dashboard's address. At home it looks like `http://192.168.1.50:7152`: open
+it in a web browser and log in as `admin` with your dashboard password.
+Each miner that has connected is listed with its hashrate. If a miner is
+missing, check the pool address you gave it in step 6.
+
+Forgot the password? `~/knots-datum-node/configure --show-password`.
+
+On a rented server the dashboard is not reachable from the internet. From
+your own computer, run `ssh -L 7152:127.0.0.1:7152 USER@YOUR-SERVER-IP`
+and open `http://127.0.0.1:7152` while that stays connected.
+
+Safari cannot log in to the dashboard; use Firefox, Chrome or Edge.
+
 ## Your settings
 
-The install asks five things. Press Enter to take the suggestion in
+The install asks six things. Press Enter to take the suggestion in
 brackets.
 
 - **Which node.** `new` installs Bitcoin Knots here. `existing` uses a
@@ -147,6 +163,11 @@ brackets.
 - **Your short name.** Written into every block you find, where anyone can
   read it. Leave it empty to stay anonymous. In solo mode it also asks for
   the main name on your blocks.
+- **Dashboard password.** The gateway has a web page showing each connected
+  miner and its hashrate. You log in as `admin` with this password; press
+  Enter to have one made for you. At home it also asks whether other
+  computers on your network may open the page (`network`) or only this one
+  (`local`). On a rented server it stays on the server; see step 7.
 
 To change any of them later, run:
 

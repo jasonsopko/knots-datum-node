@@ -18,6 +18,11 @@ STRATUM_PORT=23334
 API_PORT=7152
 PRUNE_MB=2000
 DEFAULT_TAG1="DATUM Gateway"
+# CONVOY's pool server, from the gateway's own defaults at GW_COMMIT. Written
+# into the config so the dashboard and the file both say which pool is used.
+CONVOY_HOST=datum-beta1.mine.convoy.xyz
+CONVOY_PORT=28915
+CONVOY_PUBKEY=dbb11fa0c2b5403e4f798fa6071bb97e6079d219598366032fdf2ae01962b13c5e66e2be7d6b008f0b2603f3e6f6fc64768fa786c8129c46d3e30a5867734b62
 # What the gateway's node login may call: the five the gateway uses, plus
 # three read-only ones for the status command and the connection check.
 RPC_METHODS=getbestblockhash,getblock,getblocktemplate,submitblock,preciousblock,getblockchaininfo,getnetworkinfo,getconnectioncount
@@ -39,6 +44,16 @@ die() { echo; echo "error: $*" >&2; exit 1; }
 say() { echo; echo "== $*"; }
 
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+
+# This computer's address, and whether it is a private (home or office)
+# address or one on the open internet.
+OWN_IP=$(ip -4 route get 192.0.2.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' || true)
+OWN_PRIVATE=0 LAN_CIDR=
+if [ -n "$OWN_IP" ] && python3 -c 'import ipaddress,sys; sys.exit(0 if ipaddress.ip_address(sys.argv[1]).is_private else 1)' "$OWN_IP" 2>/dev/null; then
+	OWN_PRIVATE=1
+	LAN_CIDR=$(ip -o -4 addr show 2>/dev/null | awk -v ip="$OWN_IP" '{split($4, a, "/"); if (a[1] == ip) print $4}' | head -1 || true)
+	[ -z "$LAN_CIDR" ] || LAN_CIDR=$(python3 -c 'import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1], strict=False))' "$LAN_CIDR")
+fi
 user_systemctl() { systemctl --user "$@"; }
 
 # The one line an administrator runs to install what the scripts need.
@@ -75,7 +90,7 @@ require_python() {
 # Command line flags go in F_* and win over whatever is already saved.
 
 F_ADDRESS= F_MODE= F_POOL_HOST= F_POOL_PUBKEY= F_TAG1= F_TAG2= F_TAG1_SET=0 F_TAG2_SET=0
-F_NODE= F_RPC_USER=
+F_NODE= F_RPC_USER= F_DASH_OPEN=
 
 # Handles one settings flag. Returns 1 if $1 is not one, so callers can go on
 # to their own flags. Sets SHIFT to how many arguments it used.
@@ -90,6 +105,7 @@ parse_setting_flag() {
 		--tag) F_TAG2=${2-}; F_TAG2_SET=1 ;;
 		--node) F_NODE=${2-} ;;
 		--rpc-user) F_RPC_USER=${2-} ;;
+		--dashboard) F_DASH_OPEN=${2-} ;;
 		*) return 1 ;;
 	esac
 	[ $# -ge 2 ] || die "$1 needs a value"
@@ -98,10 +114,10 @@ parse_setting_flag() {
 # Saved settings from an earlier install, if there are any.
 load_saved_settings() {
 	S_ADDRESS= S_MODE= S_POOL_HOST= S_POOL_PORT= S_POOL_PUBKEY= S_TAG1= S_TAG2= S_UNIQUE_ID= S_RPC_PASS= S_API_PASS=
-	S_RPC_URL= S_RPC_USER= S_NODE=
+	S_RPC_URL= S_RPC_USER= S_NODE= S_DASH_OPEN=
 	HAVE_SAVED=0
 	[ -f "$CONF/datum_gateway.json" ] || return 0
-	eval "$(python3 - "$CONF/datum_gateway.json" <<'PY'
+	eval "$(python3 - "$CONF/datum_gateway.json" "$CONVOY_HOST" <<'PY'
 import json, shlex, sys
 j = json.load(open(sys.argv[1]))
 m, d, b, a = j.get("mining", {}), j.get("datum", {}), j.get("bitcoind", {}), j.get("api", {})
@@ -110,7 +126,7 @@ mode = "solo" if host == "" else "pool"
 v = {
 	"S_ADDRESS": m.get("pool_address", ""),
 	"S_MODE": mode,
-	"S_POOL_HOST": host or "",
+	"S_POOL_HOST": "" if host == sys.argv[2] else (host or ""),
 	"S_POOL_PORT": str(d.get("pool_port", "")) if host else "",
 	"S_POOL_PUBKEY": d.get("pool_pubkey", "") if host else "",
 	"S_TAG1": m.get("coinbase_tag_primary", ""),
@@ -120,6 +136,7 @@ v = {
 	"S_RPC_URL": b.get("rpcurl", ""),
 	"S_RPC_USER": b.get("rpcuser", ""),
 	"S_API_PASS": a.get("admin_password", ""),
+	"S_DASH_OPEN": "local" if a.get("listen_addr", "127.0.0.1") == "127.0.0.1" else "network",
 }
 for k, val in v.items():
 	print("%s=%s" % (k, shlex.quote(val)))
@@ -135,6 +152,18 @@ check_address() {
 	[[ "$1" =~ ^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$ ]] && return 0
 	echo "${1:-that} does not look like a Bitcoin address. Use the address your mining rewards should go to; it starts with bc1, 1 or 3."
 	return 1
+}
+check_dash_password() {
+	local LC_ALL=C
+	[ -z "$1" ] && return 0
+	[ ${#1} -ge 8 ] || { echo "use at least 8 characters"; return 1; }
+	[ ${#1} -le 64 ] || { echo "use at most 64 characters"; return 1; }
+	[[ "$1" =~ ^[\!-~]+$ ]] && [[ "$1" != *'"'* ]] && [[ "$1" != *'\'* ]] && return 0
+	echo "use letters, numbers and punctuation, with no spaces, quotes or backslashes"; return 1
+}
+check_dash_open() {
+	case "$1" in network|local) return 0 ;; esac
+	echo "type network or local"; return 1
 }
 check_mode() {
 	case "$1" in pool|solo) return 0 ;; esac
@@ -166,7 +195,7 @@ ask() {
 	shift 4
 	show=${def:-none}
 	while :; do
-		read -r -p "$q [$show]: " ans || die "no answer given"
+		read -e -r -p "$q [$show]: " ans || die "no answer given"
 		ans=${ans:-$def}
 		[ "$ans" = - ] && ans=
 		if msg=$("$check" "$ans" "$@"); then
@@ -342,7 +371,7 @@ TEXT
 					echo "goes for rpcallowip, if an existing line already allows this computer."
 				fi
 				echo
-				read -r -p "Press Enter once the node has restarted. " _ || die "no answer given"
+				read -e -r -p "Press Enter once the node has restarted. " _ || die "no answer given"
 			elif [ "$who" != "$RPC_USER" ] || [ -z "$RPC_PASS" ]; then
 				RPC_USER=$who
 				read -r -s -p "Password for $RPC_USER: " RPC_PASS || die "no answer given"; echo
@@ -357,7 +386,7 @@ TEXT
 		[ $rc = 0 ] || [ $rc = 3 ] && return 0
 		[ $interactive = 1 ] || die "the node is not usable yet, see above"
 		local again
-		read -r -p "Press Enter to check again, c to change the address or login, or q to stop: " again || die "no answer given"
+		read -e -r -p "Press Enter to check again, c to change the address or login, or q to stop: " again || die "no answer given"
 		case "${again,,}" in q) exit 1 ;; c) need_ask=1 ;; esac
 	done
 }
@@ -366,7 +395,7 @@ TEXT
 # about each one when run in a terminal (unless NO_PROMPT=1); otherwise the
 # flags and saved values have to be enough.
 settle_settings() {
-	local interactive=0
+	local interactive=0 msg
 	[ -t 0 ] && [ -t 1 ] && [ "${NO_PROMPT:-0}" = 0 ] && interactive=1
 
 	ADDRESS=${F_ADDRESS:-$S_ADDRESS}
@@ -434,7 +463,45 @@ TEXT
 		ask TAG2 "your short name" "$TAG2" check_tag "your short name"
 	fi
 
-	local msg
+	# The gateway's web dashboard: overall stats, and behind the password,
+	# each connected miner and its hashrate.
+	DASH_PASS=${DASHBOARD_PASSWORD:-$S_API_PASS}
+	DASH_OPEN=${F_DASH_OPEN:-$S_DASH_OPEN}
+	if [ -z "$DASH_OPEN" ]; then if [ $OWN_PRIVATE = 1 ]; then DASH_OPEN=network; else DASH_OPEN=local; fi; fi
+	if [ $interactive = 1 ]; then
+		echo
+		echo "The gateway has a web page that shows each miner connected to it and its"
+		echo "hashrate, so you can check that your miners are working. You log in"
+		echo "with the username admin and a password."
+		local p1 p2 msg2
+		while :; do
+			if [ -n "$S_API_PASS" ]; then
+				read -r -s -p "Dashboard password (Enter keeps the current one): " p1 || die "no answer given"; echo
+			else
+				read -r -s -p "Dashboard password (Enter makes one for you): " p1 || die "no answer given"; echo
+			fi
+			[ -n "$p1" ] || break
+			if ! msg2=$(check_dash_password "$p1"); then echo "  $msg2"; continue; fi
+			read -r -s -p "Type it again: " p2 || die "no answer given"; echo
+			[ "$p1" = "$p2" ] && { DASH_PASS=$p1; break; }
+			echo "  those did not match"
+		done
+		if [ $OWN_PRIVATE = 1 ]; then
+			echo
+			echo "Open the web page to other computers on your network (network), or only"
+			echo "to this computer (local)?"
+			ask DASH_OPEN "network or local" "$DASH_OPEN" check_dash_open
+		else
+			DASH_OPEN=local
+		fi
+	fi
+	[ -n "$DASH_PASS" ] || DASH_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')
+	msg=$(check_dash_password "$DASH_PASS") || die "dashboard password: $msg"
+	msg=$(check_dash_open "$DASH_OPEN") || die "--dashboard: $msg"
+	if [ "$DASH_OPEN" = network ] && [ $OWN_PRIVATE = 0 ]; then
+		die "this computer has a public internet address, so the dashboard stays on this computer. Reach it with an SSH tunnel; see the README."
+	fi
+
 	[ -n "$ADDRESS" ] || die "a payout address is needed: run this in a terminal to be asked, or pass --address"
 	msg=$(check_address "$ADDRESS") || die "$msg"
 	msg=$(check_mode "$MODE") || die "$msg"
@@ -455,6 +522,25 @@ check_pool_choice() {
 	check_pool_host "$1"
 }
 
+dashboard_url() {
+	if [ "$DASH_OPEN" = network ]; then echo "http://${OWN_IP:-<this computer>}:$API_PORT"; else echo "http://127.0.0.1:$API_PORT"; fi
+}
+dashboard_help() {	# how to open it, for the end of install and configure
+	local url=$(dashboard_url)
+	if [ "$DASH_OPEN" = local ]; then
+		url=http://127.0.0.1:$API_PORT
+		echo "Your gateway's web pages are on this computer only. From your own"
+		echo "computer, run this and keep it connected while you look:"
+		echo "    ssh -L $API_PORT:127.0.0.1:$API_PORT $(id -un)@${OWN_IP:-<this computer>}"
+		echo
+	fi
+	echo "Your gateway's stats (no login):    $url"
+	echo "Your miners and their hashrate:     $url/clients"
+	echo "  log in as admin with your dashboard password. To see it again:"
+	echo "  ~/knots-datum-node/configure --show-password"
+	echo "  (Safari cannot log in; use Firefox, Chrome or Edge.)"
+	echo "Settings are changed with ~/knots-datum-node/configure, not on the page."
+}
 show_settings() {
 	if [ "$NODE" = new ]; then echo "  node:           new, installed here"; else echo "  node:           existing, at $NODE_HOST:$NODE_PORT (login $RPC_USER)"; fi
 	echo "  payout address: $ADDRESS"
@@ -464,6 +550,7 @@ show_settings() {
 		echo "  mining:         solo, blocks named \"$TAG1\""
 	fi
 	echo "  your name:      ${TAG2:-(none)}"
+	if [ "$DASH_OPEN" = network ]; then echo "  dashboard:      $(dashboard_url), open to your network"; else echo "  dashboard:      this computer only"; fi
 }
 
 # --- files ----------------------------------------------------------------
@@ -493,6 +580,8 @@ render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
 		datum='"pool_pass_workers": true, "pool_pass_full_users": false, "pooled_mining_only": true'
 		if [ -n "$POOL_HOST" ]; then
 			datum+=", \"pool_host\": \"$POOL_HOST\", \"pool_port\": $POOL_PORT, \"pool_pubkey\": \"$POOL_PUBKEY\""
+		else
+			datum+=", \"pool_host\": \"$CONVOY_HOST\", \"pool_port\": $CONVOY_PORT, \"pool_pubkey\": \"$CONVOY_PUBKEY\""
 		fi
 	else
 		datum='"pool_host": "", "pooled_mining_only": false'
@@ -514,7 +603,7 @@ render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
     "pow_algorithm": "auto"
   },
   "api": {
-    "listen_addr": "127.0.0.1",
+    "listen_addr": "$( [ "$DASH_OPEN" = network ] && echo "" || echo 127.0.0.1 )",
     "listen_port": $API_PORT,
     "admin_password": "$2",
     "modify_conf": false
@@ -602,7 +691,7 @@ else
 	python3 -c 'import json,sys; sys.exit(1 if json.loads(sys.argv[1])["initialblockdownload"] else 0)' "\$out" && synced=yes
 	echo "connected to \$(rpc getconnectioncount) other nodes"
 fi
-if systemctl --user is-active --quiet $GW_UNIT; then echo "gateway: running"; else echo "gateway: NOT running"; fi
+if systemctl --user is-active --quiet $GW_UNIT; then echo "gateway: running, dashboard at $(dashboard_url)"; else echo "gateway: NOT running"; fi
 # The gateway logs errors while the node syncs; they only matter once it has.
 [ \$synced = yes ] && journalctl --user -u $GW_UNIT -n 5 --no-pager -o cat 2>/dev/null
 exit 0
@@ -619,6 +708,9 @@ firewall_commands() {
 			family=ipv4; [[ "$ip" == *:* ]] && family=ipv6
 			echo "sudo firewall-cmd --permanent --add-rich-rule='rule family=\"$family\" source address=\"$ip\" port port=\"$STRATUM_PORT\" protocol=\"tcp\" accept'"
 		done
+		if [ "$DASH_OPEN" = network ] && [ -n "$LAN_CIDR" ]; then
+			echo "sudo firewall-cmd --permanent --add-rich-rule='rule family=\"ipv4\" source address=\"$LAN_CIDR\" port port=\"$API_PORT\" protocol=\"tcp\" accept'"
+		fi
 		echo "sudo firewall-cmd --reload"
 	else
 		echo "${UFW_INSTALL:-# install ufw with your package manager}"
@@ -626,6 +718,7 @@ firewall_commands() {
 		echo "sudo ufw allow 8333/tcp"
 		[ ${#MINER_IPS[@]} -gt 0 ] || echo "sudo ufw allow $STRATUM_PORT/tcp"
 		for ip in "${MINER_IPS[@]}"; do echo "sudo ufw allow from $ip to any port $STRATUM_PORT proto tcp"; done
+		if [ "$DASH_OPEN" = network ] && [ -n "$LAN_CIDR" ]; then echo "sudo ufw allow from $LAN_CIDR to any port $API_PORT proto tcp"; fi
 		echo "sudo ufw enable"
 	fi
 }

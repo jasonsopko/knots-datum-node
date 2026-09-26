@@ -82,7 +82,6 @@ echo "user $(id -un), RAM ${MEM_MB} MB, free disk ${DISK_GB} GB, $(nproc) CPUs"
 # dbcache: about a quarter of RAM, 450 MB floor, 4000 MB ceiling
 DBCACHE=$(( MEM_MB / 4 )); [ $DBCACHE -lt 450 ] && DBCACHE=450; [ $DBCACHE -gt 4000 ] && DBCACHE=4000
 TARBALL=bitcoin-$KNOTS_VER-$ARCH.tar.gz
-OWN_IP=$(ip -4 route get 192.0.2.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' || true)
 
 # What an administrator has to do first. Collect everything missing and print
 # it at once, so nobody has to go back and forth.
@@ -224,8 +223,7 @@ else
 		rm -f "$UNITS/$NODE_UNIT"
 	fi
 fi
-API_PASS=${S_API_PASS:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))')}
-(umask 077; render_gateway_json "$RPC_PASS" "$API_PASS" > "$CONF/datum_gateway.json")
+(umask 077; render_gateway_json "$RPC_PASS" "$DASH_PASS" > "$CONF/datum_gateway.json")
 install -m 755 "$SRC_DIR/configure.sh" "$BASE/configure"
 install -m 644 "$SRC_DIR/lib.sh" "$BASE/lib.sh"
 
@@ -264,10 +262,12 @@ When it says "synced", point your miners at:
     stratum+tcp://$SHOW_IP:$STRATUM_PORT
     username: any name for the miner   password: x
 
-To change your payout address, pool or name later:
+To change your node, payout address, pool, name or dashboard later:
 
     ~/knots-datum-node/configure
+
 EOF
+dashboard_help
 if [ ${#MINER_IPS[@]} -gt 0 ]; then
 	FW_TEXT="have an administrator run these, so only ${MINER_IPS[*]} can
 reach the mining port. Until then it is open to anyone who finds it."
