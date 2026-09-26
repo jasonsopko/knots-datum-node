@@ -18,6 +18,11 @@ STRATUM_PORT=23334
 API_PORT=7152
 PRUNE_MB=2000
 DEFAULT_TAG1="DATUM Gateway"
+# What the gateway's node login may call: the five the gateway uses, plus
+# three read-only ones for the status command and the connection check.
+RPC_METHODS=getbestblockhash,getblock,getblocktemplate,submitblock,preciousblock,getblockchaininfo,getnetworkinfo,getconnectioncount
+LOCAL_RPC_URL=http://127.0.0.1:8332
+EXT_RPC_USER=knotsdatum
 
 HOME_DIR=${HOME:?}
 BASE=$HOME_DIR/knots-datum-node
@@ -62,12 +67,15 @@ require_python() {
 
 # --- settings -------------------------------------------------------------
 #
+# NODE: "new" (a Knots node this installs and runs here) or "existing" (a
+# node the user already runs), reached at RPC_URL with RPC_USER/RPC_PASS.
 # ADDRESS, MODE (pool or solo), POOL_HOST/POOL_PORT/POOL_PUBKEY (empty host
 # means CONVOY, the gateway's default), TAG1 (primary coinbase tag, used in
 # solo mode only; a pool puts its own there), TAG2 (secondary tag), UNIQUE_ID.
 # Command line flags go in F_* and win over whatever is already saved.
 
 F_ADDRESS= F_MODE= F_POOL_HOST= F_POOL_PUBKEY= F_TAG1= F_TAG2= F_TAG1_SET=0 F_TAG2_SET=0
+F_NODE= F_RPC_USER=
 
 # Handles one settings flag. Returns 1 if $1 is not one, so callers can go on
 # to their own flags. Sets SHIFT to how many arguments it used.
@@ -80,6 +88,8 @@ parse_setting_flag() {
 		--pool-pubkey) F_POOL_PUBKEY=${2-} ;;
 		--primary-tag) F_TAG1=${2-}; F_TAG1_SET=1 ;;
 		--tag) F_TAG2=${2-}; F_TAG2_SET=1 ;;
+		--node) F_NODE=${2-} ;;
+		--rpc-user) F_RPC_USER=${2-} ;;
 		*) return 1 ;;
 	esac
 	[ $# -ge 2 ] || die "$1 needs a value"
@@ -88,6 +98,7 @@ parse_setting_flag() {
 # Saved settings from an earlier install, if there are any.
 load_saved_settings() {
 	S_ADDRESS= S_MODE= S_POOL_HOST= S_POOL_PORT= S_POOL_PUBKEY= S_TAG1= S_TAG2= S_UNIQUE_ID= S_RPC_PASS= S_API_PASS=
+	S_RPC_URL= S_RPC_USER= S_NODE=
 	HAVE_SAVED=0
 	[ -f "$CONF/datum_gateway.json" ] || return 0
 	eval "$(python3 - "$CONF/datum_gateway.json" <<'PY'
@@ -106,6 +117,8 @@ v = {
 	"S_TAG2": m.get("coinbase_tag_secondary", ""),
 	"S_UNIQUE_ID": str(m.get("coinbase_unique_id", "")),
 	"S_RPC_PASS": b.get("rpcpassword", ""),
+	"S_RPC_URL": b.get("rpcurl", ""),
+	"S_RPC_USER": b.get("rpcuser", ""),
 	"S_API_PASS": a.get("admin_password", ""),
 }
 for k, val in v.items():
@@ -113,6 +126,8 @@ for k, val in v.items():
 PY
 )"
 	HAVE_SAVED=1
+	# The node unit is only there when this installed the node.
+	if [ -f "$UNITS/$NODE_UNIT" ]; then S_NODE=new; else S_NODE=existing; fi
 }
 
 check_address() {
@@ -162,6 +177,191 @@ ask() {
 	done
 }
 
+check_node_choice() {
+	case "$1" in new|existing) return 0 ;; esac
+	echo "type new or existing"; return 1
+}
+check_node_addr() {	# host or host:port; sets NODE_HOST and NODE_PORT
+	[[ "$1" =~ ^[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?$ ]] || { echo "type the node's IP address or name, optionally with :port"; return 1; }
+	local h=$1 p=8332
+	if [[ "$h" == *:* ]]; then p=${h##*:}; h=${h%:*}; fi
+	[ "$p" -ge 1 ] && [ "$p" -le 65535 ] || { echo "port must be between 1 and 65535"; return 1; }
+	NODE_HOST=$h NODE_PORT=$p
+}
+check_any() { return 0; }
+# Something already answering on this computer's RPC port that this did not install.
+other_local_node() {
+	[ -f "$UNITS/$NODE_UNIT" ] && return 1
+	ss -Hltn "sport = :8332" 2>/dev/null | grep -q .
+}
+
+# Asks the node the questions the gateway will ask. Prints one line saying
+# what it found. Returns 0 if it is ready, 3 if it works but is still syncing,
+# 1 if it cannot be used.
+node_check() {	# $1 url, $2 user, $3 password
+	python3 - "$1" "$2" "$3" <<'PY'
+import base64, json, socket, sys, urllib.error, urllib.request
+url, user, pw = sys.argv[1:4]
+auth = "Basic " + base64.b64encode(("%s:%s" % (user, pw)).encode()).decode()
+def call(method, params=None):
+	body = json.dumps({"jsonrpc": "1.0", "id": "check", "method": method, "params": params or []}).encode()
+	req = urllib.request.Request(url, data=body, headers={"Authorization": auth, "Content-Type": "application/json"})
+	try:
+		return json.load(urllib.request.urlopen(req, timeout=15))
+	except urllib.error.HTTPError as e:
+		if e.code == 401:
+			print("the node turned down the username or password")
+			sys.exit(1)
+		if e.code == 403:
+			print("the login works, but the node does not let it call %s: check the rpcwhitelist line" % method)
+			sys.exit(1)
+		try:
+			return json.load(e)
+		except Exception:
+			print("the node answered with HTTP error %d" % e.code)
+			sys.exit(1)
+	except (urllib.error.URLError, socket.timeout, OSError) as e:
+		reason = getattr(e, "reason", e)
+		print("could not reach a node at %s (%s). Is it running, and does it accept RPC connections from this computer (rpcbind, rpcallowip, firewall)?" % (url, reason))
+		sys.exit(1)
+info = call("getblockchaininfo").get("result") or {}
+net = call("getnetworkinfo").get("result") or {}
+version = net.get("subversion", "unknown version").strip("/")
+gbt = call("getblocktemplate", [{"rules": ["segwit", "blake2b"]}])
+syncing = info.get("initialblockdownload", False)
+if gbt.get("error"):
+	if syncing:
+		print("found %s, still syncing (block %s of %s); the gateway will start once it catches up" % (version, info.get("blocks"), info.get("headers")))
+		sys.exit(3)
+	print("found %s, but it would not give a block template: %s" % (version, gbt["error"].get("message")))
+	sys.exit(1)
+rules = (gbt.get("result") or {}).get("rules", [])
+if not any("blake2b" in r for r in rules):
+	chain = info.get("chain", "main")
+	if chain != "main":
+		print("found %s on the %s network, where it does not build BLAKE2b blocks yet. Use a mainnet node." % (version, chain))
+	else:
+		print("found %s, but it does not build BLAKE2b blocks. It needs Bitcoin Knots 29.4.1 or later." % version)
+	sys.exit(1)
+print("found %s at block %s, building BLAKE2b blocks" % (version, info.get("blocks")))
+PY
+}
+
+# The lines an existing node needs for the gateway's new login.
+node_conf_lines() {	# $1 = rpcauth value
+	echo "rpcauth=$1"
+	echo "rpcwhitelist=$EXT_RPC_USER:$RPC_METHODS"
+	echo "rpcwhitelistdefault=0"
+	if [ "$NODE_HOST" != 127.0.0.1 ] && [ "$NODE_HOST" != localhost ]; then
+		local me
+		me=$(ip -4 route get "$(getent ahostsv4 "$NODE_HOST" | awk '{print $1; exit}')" 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' || true)
+		[ -n "$me" ] || me="<this computer's IP>"
+		echo "rpcallowip=$me"
+		echo "rpcbind=${NODE_HOST}"
+	fi
+}
+
+new_rpcauth() {	# $1 user, $2 password
+	python3 -c 'import hmac,secrets,sys; s=secrets.token_hex(16); print("%s:%s$%s" % (sys.argv[1], s, hmac.new(s.encode(), sys.argv[2].encode(), "sha256").hexdigest()))' "$1" "$2"
+}
+
+# Which node the gateway uses. Sets NODE, RPC_URL, RPC_USER, and RPC_PASS
+# (empty for a new node; the install makes one).
+settle_node() {	# $1 = 1 if interactive
+	local interactive=$1 msg rc
+	NODE=${S_NODE:-new}
+	if [ -n "$F_NODE" ]; then
+		if [ "$F_NODE" = new ]; then NODE=new; else NODE=existing; msg=$(check_node_addr "$F_NODE") || die "--node: $msg"; check_node_addr "$F_NODE"; fi
+	elif [ "$NODE" = existing ]; then
+		local saved=${S_RPC_URL#http://}; saved=${saved%/}
+		check_node_addr "$saved" >/dev/null && check_node_addr "$saved"
+	fi
+	[ -z "$F_NODE" ] && [ -z "$S_NODE" ] && other_local_node && NODE=existing && NODE_HOST=127.0.0.1 NODE_PORT=8332
+
+	if [ $interactive = 1 ]; then
+		echo
+		if other_local_node; then
+			echo "A Bitcoin node is already running on this computer (port 8332)."
+			echo
+		fi
+		cat <<'TEXT'
+Which Bitcoin node should your gateway use?
+
+  new       Install Bitcoin Knots here. It downloads and checks the whole
+            chain before your miners can connect: about a day, and about
+            800 GB of internet data.
+
+  existing  Use a Bitcoin Knots node you already run, on this computer or
+            on your network. It needs to be version 29.4.1 or later, the
+            versions that build BLAKE2b blocks.
+
+TEXT
+		ask NODE "new or existing" "$NODE" check_node_choice
+	fi
+
+	if [ "$NODE" = new ]; then
+		other_local_node && die "a Bitcoin node is already running on this computer, and a second one would clash with it. Choose existing to use it, or stop it first."
+		RPC_URL=$LOCAL_RPC_URL RPC_USER=gateway
+		RPC_PASS=; [ "$S_NODE" = new ] && RPC_PASS=$S_RPC_PASS
+		return 0
+	fi
+
+	local addr=${NODE_HOST:-127.0.0.1}:${NODE_PORT:-8332}
+	RPC_USER=${F_RPC_USER:-${S_RPC_USER:-}}
+	[ "$S_NODE" = existing ] || [ -n "$F_RPC_USER" ] || RPC_USER=
+	RPC_PASS=${NODE_RPC_PASSWORD:-}
+	[ -n "$RPC_PASS" ] || { [ "$RPC_USER" = "$S_RPC_USER" ] && [ "$S_NODE" = existing ] && RPC_PASS=$S_RPC_PASS; } || true
+
+	local need_ask=1
+	while :; do
+		if [ $interactive = 1 ] && [ $need_ask = 1 ]; then
+			need_ask=0
+			echo
+			ask addr "Your node's address (IP or name, and :port if not 8332)" "$addr" check_node_addr
+			check_node_addr "$addr"
+			echo
+			echo "The gateway needs a login on your node. Press Enter to make a new one"
+			echo "only for the gateway (recommended), or type the RPC username you use now."
+			local who=${RPC_USER:-new}
+			ask who "login" "$who" check_any
+			if [ "$who" = new ] || { [ "$who" = "$EXT_RPC_USER" ] && [ -z "$RPC_PASS" ]; }; then
+				RPC_USER=$EXT_RPC_USER
+				RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+				echo
+				echo "Add these lines to the bitcoin.conf of the node at $NODE_HOST, then restart"
+				echo "that node:"
+				echo
+				node_conf_lines "$(new_rpcauth "$RPC_USER" "$RPC_PASS")" | sed 's/^/    /'
+				echo
+				echo "rpcwhitelistdefault=0 keeps the node's other logins working as they do"
+				echo "now; without it, adding a whitelist line locks them out. If your"
+				echo "bitcoin.conf already sets rpcwhitelistdefault, keep your own setting."
+				if [ "$NODE_HOST" != 127.0.0.1 ]; then
+					echo "If that bitcoin.conf already has an rpcbind line covering this address"
+					echo "(rpcbind=0.0.0.0 covers all of them), leave the rpcbind line out. The same"
+					echo "goes for rpcallowip, if an existing line already allows this computer."
+				fi
+				echo
+				read -r -p "Press Enter once the node has restarted. " _ || die "no answer given"
+			elif [ "$who" != "$RPC_USER" ] || [ -z "$RPC_PASS" ]; then
+				RPC_USER=$who
+				read -r -s -p "Password for $RPC_USER: " RPC_PASS || die "no answer given"; echo
+			fi
+		fi
+		[ -n "$RPC_USER" ] && [ -n "$RPC_PASS" ] || die "an existing node needs a login: run this in a terminal to be asked, or pass --rpc-user and set NODE_RPC_PASSWORD"
+		RPC_URL=http://$NODE_HOST:$NODE_PORT
+		echo
+		echo "Checking the node at $NODE_HOST:$NODE_PORT..."
+		msg=$(node_check "$RPC_URL" "$RPC_USER" "$RPC_PASS") && rc=0 || rc=$?
+		echo "  $msg"
+		[ $rc = 0 ] || [ $rc = 3 ] && return 0
+		[ $interactive = 1 ] || die "the node is not usable yet, see above"
+		local again
+		read -r -p "Press Enter to check again, c to change the address or login, or q to stop: " again || die "no answer given"
+		case "${again,,}" in q) exit 1 ;; c) need_ask=1 ;; esac
+	done
+}
+
 # Works out the settings from flags, then saved values, then defaults. Asks
 # about each one when run in a terminal (unless NO_PROMPT=1); otherwise the
 # flags and saved values have to be enough.
@@ -181,6 +381,9 @@ settle_settings() {
 	if [ $interactive = 1 ]; then
 		echo
 		echo "Answer each question, or press Enter to keep the value in [brackets]."
+	fi
+	settle_node $interactive
+	if [ $interactive = 1 ]; then
 		echo
 		ask ADDRESS "Bitcoin address for your mining rewards" "$ADDRESS" check_address
 		echo
@@ -253,6 +456,7 @@ check_pool_choice() {
 }
 
 show_settings() {
+	if [ "$NODE" = new ]; then echo "  node:           new, installed here"; else echo "  node:           existing, at $NODE_HOST:$NODE_PORT (login $RPC_USER)"; fi
 	echo "  payout address: $ADDRESS"
 	if [ "$MODE" = pool ]; then
 		if [ -n "$POOL_HOST" ]; then echo "  mining:         pool, $POOL_HOST:$POOL_PORT"; else echo "  mining:         pool, CONVOY"; fi
@@ -276,7 +480,7 @@ maxmempool=300
 rpcbind=127.0.0.1
 rpcallowip=127.0.0.1
 rpcauth=$1
-rpcwhitelist=gateway:getbestblockhash,getblock,getblocktemplate,submitblock,preciousblock
+rpcwhitelist=gateway:$RPC_METHODS
 rpcwhitelistdefault=0
 blocknotify=curl -s -m 5 -o /dev/null http://127.0.0.1:$API_PORT/NOTIFY
 EOF
@@ -296,9 +500,9 @@ render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
 	cat <<EOF
 {
   "bitcoind": {
-    "rpcuser": "gateway",
+    "rpcuser": "$RPC_USER",
     "rpcpassword": "$1",
-    "rpcurl": "http://127.0.0.1:8332",
+    "rpcurl": "$RPC_URL",
     "notify_fallback": true
   },
   "stratum": { "listen_port": $STRATUM_PORT, "max_clients": 256 },
@@ -343,8 +547,7 @@ render_gateway_unit() {
 	cat <<EOF
 [Unit]
 Description=DATUM Gateway (knots-datum-node)
-After=$NODE_UNIT
-Requires=$NODE_UNIT
+$(if [ "$NODE" = new ]; then printf 'After=%s\nRequires=%s\n' "$NODE_UNIT" "$NODE_UNIT"; fi)
 
 [Service]
 WorkingDirectory=$GW_STATE
@@ -376,16 +579,28 @@ render_status_script() {
 #!/bin/bash
 # Shows how far the node has synced and whether the gateway is running.
 export XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-/run/user/\$(id -u)}
-cli() { $BIN/bitcoin-cli -conf=$CONF/bitcoin.conf -datadir=$DATA "\$@"; }
+# Asks the node, with the gateway's own login.
+rpc() {
+	python3 - "$CONF/datum_gateway.json" "\$1" <<'PY'
+import base64, json, sys, urllib.request
+c = json.load(open(sys.argv[1]))["bitcoind"]
+auth = "Basic " + base64.b64encode((c["rpcuser"] + ":" + c["rpcpassword"]).encode()).decode()
+req = urllib.request.Request(c["rpcurl"], data=json.dumps({"jsonrpc": "1.0", "id": "status", "method": sys.argv[2], "params": []}).encode(), headers={"Authorization": auth, "Content-Type": "application/json"})
+try:
+	print(json.dumps(json.load(urllib.request.urlopen(req, timeout=10))["result"]))
+except Exception:
+	sys.exit(1)
+PY
+}
 synced=no
-if ! systemctl --user is-active --quiet $NODE_UNIT; then
+if [ "$NODE" = new ] && ! systemctl --user is-active --quiet $NODE_UNIT; then
 	echo "node: NOT running (see: journalctl --user -u $NODE_UNIT)"
-elif ! out=\$(cli getblockchaininfo 2>&1); then
-	echo "node: starting up"
+elif ! out=\$(rpc getblockchaininfo); then
+	if [ "$NODE" = new ]; then echo "node: starting up"; else echo "node: cannot reach your node at $RPC_URL"; fi
 else
 	python3 -c 'import json,sys; j=json.loads(sys.argv[1]); print("node: getting the list of blocks from other nodes, miners cannot connect yet" if j["headers"] == 0 else "node: %s, block %d of %d, %.1f%% checked" % ("still syncing, miners cannot connect yet" if j["initialblockdownload"] else "synced", j["blocks"], j["headers"], 100*j["verificationprogress"]))' "\$out"
 	python3 -c 'import json,sys; sys.exit(1 if json.loads(sys.argv[1])["initialblockdownload"] else 0)' "\$out" && synced=yes
-	echo "connected to \$(cli getconnectioncount) other nodes"
+	echo "connected to \$(rpc getconnectioncount) other nodes"
 fi
 if systemctl --user is-active --quiet $GW_UNIT; then echo "gateway: running"; else echo "gateway: NOT running"; fi
 # The gateway logs errors while the node syncs; they only matter once it has.

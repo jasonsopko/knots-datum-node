@@ -18,13 +18,18 @@ listed up front, and the script tells you if any are missing.
   internet, so run this on a rented server. (A home computer also works if you
   can forward a port on your router, but a server is simpler.)
 
+**Already run a Bitcoin Knots node** (on this computer, or another one on
+your network, such as an Umbrel or Start9)? The install can use it, and
+skip downloading a second copy of the chain. It asks.
+
 ## What you need
 
 - A computer running Linux with systemd: Debian, Ubuntu, Fedora, Arch,
-  openSUSE and their relatives all work. 4 GB of memory and 60 GB of free disk
-  is comfortable; 2 GB and 40 GB is the minimum.
-- Time and data. After the install, your node downloads and checks the
-  whole Bitcoin chain before your miners can connect. That takes most of a
+  openSUSE and their relatives all work. For a new node, 4 GB of memory and
+  60 GB of free disk is comfortable; 2 GB and 40 GB is the minimum. With a
+  node you already run, any small computer will do.
+- Time and data, for a new node. After the install, your node downloads
+  and checks the whole Bitcoin chain before your miners can connect. That takes most of a
   day and downloads about 800 GB. If your internet plan has a data
   cap, check it first.
 - You do not need 800 GB of disk. The node checks each block and then
@@ -109,8 +114,17 @@ Use the address the install printed at the end. It looks like
 
 ## Your settings
 
-The install asks four things. Press Enter to take the suggestion in
+The install asks five things. Press Enter to take the suggestion in
 brackets.
+
+- **Which node.** `new` installs Bitcoin Knots here. `existing` uses a
+  Knots node you already run (version 29.4.1 or later), here or on your
+  network. For an existing node it makes a login only for the gateway and
+  prints the lines to add to that node's `bitcoin.conf`, limited to the
+  calls the gateway needs; you restart the node, and it checks the
+  connection. If you cannot edit that node's `bitcoin.conf` (some node
+  appliances do not allow it), type the RPC username you already have
+  instead, and it asks for the password.
 
 - **Payout address.** The Bitcoin address your rewards go to.
 - **Pool or solo.** Either way, your own node builds every block your
@@ -139,11 +153,13 @@ To change any of them later, run:
     ~/knots-datum-node/configure
 
 It asks the same questions with your current answers as the suggestions,
-and restarts the gateway with the new ones. Your node keeps running.
+and restarts the gateway with the new ones. Your node keeps running. It can
+also move the gateway from the node this installed to one you already run.
 
 Settings can also be given as flags, for scripted installs:
 `--address`, `--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
-`--pool-pubkey`. See `./install.sh --help`.
+`--pool-pubkey`, and `--node new` or `--node HOST[:PORT] --rpc-user USER`
+with the password in `NODE_RPC_PASSWORD`. See `./install.sh --help`.
 
 ## Choosing a server
 

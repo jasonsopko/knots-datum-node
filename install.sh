@@ -14,6 +14,8 @@
 # Settings can also be given as flags, which skips the questions when there is
 # no terminal: --address <address> --mode pool|solo [--tag <your name>]
 # [--primary-tag <name>] [--pool-host <host[:port]> --pool-pubkey <hex>]
+# [--node new | --node <host[:port]> --rpc-user <user>, with the password in
+# the NODE_RPC_PASSWORD environment variable, to use a node you already run]
 #
 # The mining port is open to anyone by default, like a pool's.
 # --miner-ip <IP or range> (repeatable) prints firewall commands that limit it
@@ -77,13 +79,10 @@ esac
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 DISK_GB=$(df -BG --output=avail "$HOME_DIR" | tail -1 | tr -dc 0-9)
 echo "user $(id -un), RAM ${MEM_MB} MB, free disk ${DISK_GB} GB, $(nproc) CPUs"
-echo "Note: after this finishes, the node downloads and checks the whole chain"
-echo "before miners can connect. That takes most of a day and about 800 GB of"
-echo "internet data. It deletes old blocks as it goes, so it needs far less disk."
 # dbcache: about a quarter of RAM, 450 MB floor, 4000 MB ceiling
 DBCACHE=$(( MEM_MB / 4 )); [ $DBCACHE -lt 450 ] && DBCACHE=450; [ $DBCACHE -gt 4000 ] && DBCACHE=4000
 TARBALL=bitcoin-$KNOTS_VER-$ARCH.tar.gz
-OWN_IP=$(ip -4 route get 192.0.2.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+OWN_IP=$(ip -4 route get 192.0.2.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' || true)
 
 # What an administrator has to do first. Collect everything missing and print
 # it at once, so nobody has to go back and forth.
@@ -93,8 +92,6 @@ for c in "${COMMANDS[@]}"; do command -v "$c" >/dev/null 2>&1 || missing_pkgs=1;
 command -v pkg-config >/dev/null 2>&1 && { pkg-config --exists "${LIBS[@]}" || missing_pkgs=1; }
 [ $missing_pkgs = 0 ] || MISSING+=("$PKG_INSTALL")
 [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" = yes ] || MISSING+=("sudo loginctl enable-linger $(id -un)")
-[ "$MEM_MB" -ge 1800 ] || MISSING+=("# this computer needs at least 2 GB of RAM (it has ${MEM_MB} MB)")
-[ "$DISK_GB" -ge 40 ] || MISSING+=("# this user's home directory needs at least 40 GB free (it has ${DISK_GB} GB)")
 if [ ${#MISSING[@]} -gt 0 ]; then
 	echo
 	echo "Before this can run, someone with admin rights needs to run:"
@@ -110,6 +107,15 @@ settle_settings
 echo
 show_settings
 
+if [ "$NODE" = new ]; then
+	[ "$MEM_MB" -ge 1800 ] || { [ $DRY_RUN = 1 ] && echo "warning: a new node needs at least 2 GB of RAM (this has ${MEM_MB} MB)"; } || die "a new node needs at least 2 GB of RAM (this computer has ${MEM_MB} MB). Use an existing node, or a bigger computer."
+	[ "$DISK_GB" -ge 40 ] || { [ $DRY_RUN = 1 ] && echo "warning: a new node needs at least 40 GB free disk (this has ${DISK_GB} GB)"; } || die "a new node needs at least 40 GB free in your home directory (it has ${DISK_GB} GB)."
+	echo
+	echo "Note: after this finishes, the node downloads and checks the whole chain"
+	echo "before miners can connect. That takes most of a day and about 800 GB of"
+	echo "internet data. It deletes old blocks as it goes, so it needs far less disk."
+fi
+
 if [ $DRY_RUN = 1 ]; then
 	PW='<random password, generated at install>'
 	cat <<EOF
@@ -118,12 +124,17 @@ DRY RUN: nothing below has been done. A real run does this, in order, as
 user $(id -un), without root.
 
 == 1. download Bitcoin Knots $KNOTS_VER
+EOF
+	if [ "$NODE" = new ]; then cat <<EOF
 $KNOTS_BASE/SHA256SUMS
 $KNOTS_BASE/SHA256SUMS.asc
 $KNOTS_BASE/$TARBALL
 Stops unless SHA256SUMS.asc is a valid signature by
 $KNOTS_FPR (Luke Dashjr, Knots release key) and the download matches its
 line in SHA256SUMS. Puts bitcoind and bitcoin-cli in $BIN.
+EOF
+	else echo "Skipped: the gateway uses your node at $NODE_HOST:$NODE_PORT."; fi
+	cat <<EOF
 
 == 2. build the DATUM gateway
 git fetch $GW_REPO $GW_COMMIT
@@ -131,13 +142,13 @@ git fetch $GW_REPO $GW_COMMIT
 Builds it and puts datum_gateway in $BIN.
 
 == 3. $CONF/bitcoin.conf (readable by you only)
-$(render_bitcoin_conf "gateway:<salt>\$<HMAC-SHA256 of the password below>")
+$(if [ "$NODE" = new ]; then render_bitcoin_conf "gateway:<salt>\$<HMAC-SHA256 of the password below>"; else echo "Your node has its own. It needs these lines for the gateway's login (a real"; echo "run makes the password and prints them with it):"; echo; node_conf_lines "$EXT_RPC_USER:<salt>\$<HMAC-SHA256 of the login password>"; fi)
 
 == 4. $CONF/datum_gateway.json (readable by you only)
-$(render_gateway_json "$PW" "$PW")
+$(render_gateway_json "$( [ "$NODE" = new ] && echo "$PW" || echo "<the node login password>")" "$PW")
 
 == 5. $UNITS/$NODE_UNIT
-$(render_node_unit)
+$(if [ "$NODE" = new ]; then render_node_unit; else echo "Skipped: your node runs on its own."; fi)
 
 == 6. $UNITS/$GW_UNIT
 $(render_gateway_unit)
@@ -148,7 +159,7 @@ $(render_status_script)
 Also copies configure.sh and lib.sh to $BASE/configure and
 $BASE/lib.sh, for changing settings later.
 
-== 8. start both services (systemctl --user enable --now)
+== 8. start the services (systemctl --user enable --now)
 EOF
 	echo
 	echo "== 9. firewall commands it prints, for an administrator to run if this"
@@ -157,12 +168,14 @@ EOF
 	exit 0
 fi
 
-mkdir -p "$BIN" "$DATA" "$GW_STATE" "$CONF" "$UNITS"
+mkdir -p "$BIN" "$GW_STATE" "$CONF" "$UNITS"
+[ "$NODE" = existing ] || mkdir -p "$DATA"
 chmod 700 "$BASE" "$CONF"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
-say "downloading Bitcoin Knots $KNOTS_VER"
 cd "$WORK"
+if [ "$NODE" = new ]; then
+say "downloading Bitcoin Knots $KNOTS_VER"
 curl -sSfO "$KNOTS_BASE/SHA256SUMS"
 curl -sSfO "$KNOTS_BASE/SHA256SUMS.asc"
 curl -sSfO "$KNOTS_BASE/$TARBALL"
@@ -177,6 +190,7 @@ grep " $TARBALL\$" SHA256SUMS | sha256sum -c - || die "download does not match S
 tar xzf "$TARBALL"
 install -m 755 "bitcoin-$KNOTS_VER/bin/bitcoind" "bitcoin-$KNOTS_VER/bin/bitcoin-cli" "$BIN/"
 "$BIN/bitcoind" -version | head -1
+fi
 
 say "building the DATUM gateway at $GW_COMMIT"
 git init -q gw && cd gw
@@ -189,15 +203,26 @@ install -m 755 build/datum_gateway "$BIN/datum_gateway"
 cd "$WORK"
 
 say "writing configuration"
-# The gateway's login to the node. Kept across reinstalls, so the node and the
-# gateway always agree on it.
-if [ -f "$CONF/bitcoin.conf" ] && [ -n "$S_RPC_PASS" ]; then
-	RPC_PASS=$S_RPC_PASS
-	echo "keeping the node configuration in $CONF"
-else
-	RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-	RPC_AUTH=$(python3 -c 'import hmac,secrets,sys; s=secrets.token_hex(16); print("gateway:%s$%s" % (s, hmac.new(s.encode(), sys.argv[1].encode(), "sha256").hexdigest()))' "$RPC_PASS")
+if [ "$NODE" = new ]; then
+	# The gateway's login to the node, kept across reinstalls so the two always
+	# agree. bitcoin.conf is rewritten around it, which brings in any new
+	# settings.
+	OLD_AUTH=
+	[ ! -f "$CONF/bitcoin.conf" ] || OLD_AUTH=$(sed -n 's/^rpcauth=//p' "$CONF/bitcoin.conf" | head -1)
+	if [ -n "$RPC_PASS" ] && [ -n "$OLD_AUTH" ]; then
+		RPC_AUTH=$OLD_AUTH
+	else
+		RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+		RPC_AUTH=$(new_rpcauth gateway "$RPC_PASS")
+	fi
 	(umask 077; render_bitcoin_conf "$RPC_AUTH" > "$CONF/bitcoin.conf")
+else
+	rm -f "$CONF/bitcoin.conf"
+	if [ -f "$UNITS/$NODE_UNIT" ]; then
+		echo "stopping the node this installed earlier; its data stays in $DATA"
+		user_systemctl disable --now "$NODE_UNIT" 2>/dev/null || true
+		rm -f "$UNITS/$NODE_UNIT"
+	fi
 fi
 API_PASS=${S_API_PASS:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))')}
 (umask 077; render_gateway_json "$RPC_PASS" "$API_PASS" > "$CONF/datum_gateway.json")
@@ -205,21 +230,32 @@ install -m 755 "$SRC_DIR/configure.sh" "$BASE/configure"
 install -m 644 "$SRC_DIR/lib.sh" "$BASE/lib.sh"
 
 say "starting"
-render_node_unit > "$UNITS/$NODE_UNIT"
+UNITS_TO_START=("$GW_UNIT")
+if [ "$NODE" = new ]; then render_node_unit > "$UNITS/$NODE_UNIT"; UNITS_TO_START=("$NODE_UNIT" "$GW_UNIT"); fi
 render_gateway_unit > "$UNITS/$GW_UNIT"
 render_status_script > "$BASE/status"
 chmod 755 "$BASE/status"
 user_systemctl daemon-reload
-user_systemctl enable -q "$NODE_UNIT" "$GW_UNIT"
-user_systemctl restart "$NODE_UNIT" "$GW_UNIT"
+user_systemctl enable -q "${UNITS_TO_START[@]}"
+user_systemctl restart "${UNITS_TO_START[@]}"
 sleep 3
 user_systemctl is-active --quiet "$GW_UNIT" || die "the gateway did not start; see: journalctl --user -u $GW_UNIT"
 
 SHOW_IP=${OWN_IP:-"<this computer's IP>"}
-cat <<EOF
+if [ "$NODE" = new ]; then
+	cat <<EOF
 
 Done. Your node is now downloading and checking the whole chain. That takes
 most of a day. To see how far along it is:
+EOF
+else
+	cat <<EOF
+
+Done. The gateway is using your node at $NODE_HOST:$NODE_PORT. To check on
+both:
+EOF
+fi
+cat <<EOF
 
     ~/knots-datum-node/status
 

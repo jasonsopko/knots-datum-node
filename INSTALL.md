@@ -104,3 +104,14 @@ commands from section 9.
 
 The node now checks the chain from the beginning, which takes most of a
 day. `~/knots-datum-node/status` shows progress.
+
+## Using a node you already run
+
+Skip steps 1, 3 and 5, and do not create `~/knots-datum-node/bitcoin`.
+In their place, add a login for the gateway to that node's `bitcoin.conf`:
+section 3 of the dry run, run with `existing`, shows the exact lines. The
+`rpcwhitelistdefault=0` line matters: without it, adding a whitelist line
+locks the node's other logins out. Restart that node. In the gateway
+configuration from section 4, `rpcurl`, `rpcuser` and `rpcpassword` point
+at that node, and the gateway's service in section 6 has no `After=` or
+`Requires=` lines.
