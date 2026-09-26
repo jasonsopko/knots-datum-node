@@ -147,7 +147,8 @@ MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 DISK_GB=$(df -BG --output=avail "$HOME_DIR" | tail -1 | tr -dc 0-9)
 echo "user $(id -un), RAM ${MEM_MB} MB, free disk ${DISK_GB} GB, $(nproc) CPUs"
 echo "Note: after this finishes, the node downloads and checks the whole chain"
-echo "before miners can connect. That takes most of a day and about 800 GB."
+echo "before miners can connect. That takes most of a day and about 800 GB of"
+echo "internet data. It deletes old blocks as it goes, so it needs far less disk."
 # dbcache: about a quarter of RAM, 450 MB floor, 4000 MB ceiling
 DBCACHE=$(( MEM_MB / 4 )); [ $DBCACHE -lt 450 ] && DBCACHE=450; [ $DBCACHE -gt 4000 ] && DBCACHE=4000
 TARBALL=bitcoin-$KNOTS_VER-$ARCH.tar.gz

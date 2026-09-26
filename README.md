@@ -27,6 +27,9 @@ listed up front, and the script tells you if any are missing.
   whole Bitcoin chain before your miners can connect. That takes most of a
   day and downloads about 800 GB. If your internet plan has a data
   cap, check it first.
+- You do not need 800 GB of disk. The node checks each block and then
+  deletes the old ones, so it keeps only a small part of what it downloads.
+  The 40 GB above is enough.
 - For a rented server, read "Choosing a server" below first.
 - A Bitcoin address for your rewards.
 
