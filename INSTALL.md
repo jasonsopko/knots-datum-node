@@ -10,7 +10,7 @@ below as the `miner` user, without `sudo`.
 File contents are not repeated here. Run the dry run with your own settings
 and copy each file from its section:
 
-    ./install.sh --address YOUR-ADDRESS --mode pool --dry-run > plan.txt
+    ./install.sh --dry-run | tee plan.txt
 
 Where a file holds a password, the dry run shows a placeholder. Step 3
 covers making the real ones.
@@ -83,9 +83,11 @@ protects the gateway's dashboard), then:
 
 Write the two files in `~/.config/systemd/user/` from sections 5 and 6.
 
-## 7. Status command
+## 7. Status and configure commands
 
-Write `~/knots-datum-node/status` from section 7 and `chmod 755` it.
+Write `~/knots-datum-node/status` from section 7 and `chmod 755` it. Copy
+`configure.sh` to `~/knots-datum-node/configure` and `lib.sh` to
+`~/knots-datum-node/lib.sh`, so you can change settings later.
 
 ## 8. Start
 

@@ -72,24 +72,19 @@ If it says `BAD signature`, or shows a different fingerprint, stop.
 
 ## Step 3: see what it will do
 
-In the command below, replace `YOUR-ADDRESS` with your own Bitcoin address,
-the one your mining rewards should go to. "Pool or solo" further down
-explains `--mode`.
+    ./install.sh --dry-run
 
-This changes nothing. It prints every download, file and service the
-install would create:
-
-    ./install.sh --address YOUR-ADDRESS --mode pool --dry-run
+It asks for your settings (see "Your settings" below), then prints every
+download, file and service the install would create. It changes nothing.
 
 ## Step 4: install
 
-The same command, with your address, without `--dry-run`:
+    ./install.sh
 
-    ./install.sh --address YOUR-ADDRESS --mode pool
-
-If anything from step 1 is missing, it stops and prints the exact commands an
-administrator needs to run. It also prints firewall commands; on a home
-computer you can ignore them.
+It asks the same questions, then installs. If anything from step 1 is
+missing, it stops and prints the exact commands an administrator needs to
+run. It also prints firewall commands; on a home computer you can ignore
+them.
 
 ## Step 5: wait for the sync
 
@@ -112,14 +107,32 @@ Use the address the install printed at the end. It looks like
   password `x`. If your server has a firewall turned on, run the firewall
   commands the install printed first.
 
-## Pool or solo
+## Your settings
 
-- `--mode pool` mines with the CONVOY pool over DATUM. Your node builds the
-  blocks; the pool counts your work and shares out rewards. For a different
-  DATUM pool, add `--pool-host HOST --pool-pubkey KEY` with the values that
-  pool publishes.
-- `--mode solo` pays you the whole reward for any block you find, and nothing
-  otherwise. With a small amount of hashpower that can mean a long wait.
+The install asks four things. Press Enter to take the suggestion in
+brackets.
+
+- **Payout address.** The Bitcoin address your rewards go to.
+- **Pool or solo.** In a pool, your node builds the blocks and the pool
+  counts your work and pays you a share of what everyone finds: steady,
+  smaller payouts. Solo pays you the whole reward for any block you find and
+  nothing otherwise, which with a small miner can mean a very long wait.
+- **Which pool.** CONVOY unless you type another DATUM pool's server address
+  and public key, which that pool publishes.
+- **Your short name.** Written into every block you find, where anyone can
+  read it. Leave it empty to stay anonymous. In solo mode it also asks for
+  the main name on your blocks.
+
+To change any of them later, run:
+
+    ~/knots-datum-node/configure
+
+It asks the same questions with your current answers as the suggestions,
+and restarts the gateway with the new ones. Your node keeps running.
+
+Settings can also be given as flags, for scripted installs:
+`--address`, `--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
+`--pool-pubkey`. See `./install.sh --help`.
 
 ## Choosing a server
 
