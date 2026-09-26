@@ -65,17 +65,18 @@ If it says `BAD signature`, or shows a different fingerprint, stop.
 
 ## Step 3: see what it will do
 
+In the command below, replace `YOUR-ADDRESS` with your own Bitcoin address,
+the one your mining rewards should go to. "Pool or solo" further down
+explains `--mode`.
+
 This changes nothing. It prints every download, file and service the
 install would create:
 
     ./install.sh --address YOUR-ADDRESS --mode pool --dry-run
 
-Replace `YOUR-ADDRESS` with your Bitcoin address. "Pool or solo" below
-explains `--mode`.
-
 ## Step 4: install
 
-The same command without `--dry-run`:
+The same command, with your address, without `--dry-run`:
 
     ./install.sh --address YOUR-ADDRESS --mode pool
 

@@ -121,7 +121,8 @@ if [ -n "$POOL_HOST$POOL_PUBKEY" ]; then
 	if [[ "$POOL_HOST" == *:* ]]; then POOL_PORT=${POOL_HOST##*:}; POOL_HOST=${POOL_HOST%:*}; fi
 	[ "$POOL_PORT" -ge 1 ] && [ "$POOL_PORT" -le 65535 ] || die "--pool-host port out of range"
 fi
-[[ "$ADDRESS" =~ ^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$ ]] || die "that does not look like a Bitcoin address"
+[ "$ADDRESS" != YOUR-ADDRESS ] || die "replace YOUR-ADDRESS with your own Bitcoin address, the one your mining rewards should go to (it starts with bc1, 1 or 3)"
+[[ "$ADDRESS" =~ ^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$ ]] || die "$ADDRESS does not look like a Bitcoin address. Use the address your mining rewards should go to; it starts with bc1, 1 or 3."
 [[ "$TAG" =~ ^[[:print:]]{0,40}$ ]] && [[ "$TAG" != *'"'* ]] && [[ "$TAG" != *'\'* ]] || die "--tag: 40 printable characters, no quotes or backslashes"
 for ip in "${MINER_IPS[@]}"; do
 	python3 -c 'import ipaddress,sys; ipaddress.ip_network(sys.argv[1], strict=False)' "$ip" 2>/dev/null || die "--miner-ip $ip is not an IP address or range"
