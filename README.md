@@ -113,10 +113,21 @@ The install asks four things. Press Enter to take the suggestion in
 brackets.
 
 - **Payout address.** The Bitcoin address your rewards go to.
-- **Pool or solo.** In a pool, your node builds the blocks and the pool
-  counts your work and pays you a share of what everyone finds: steady,
-  smaller payouts. Solo pays you the whole reward for any block you find and
-  nothing otherwise, which with a small miner can mean a very long wait.
+- **Pool or solo.** Either way, your own node builds every block your
+  miners work on and chooses which transactions go in it.
+  - **Pool:** your gateway connects to a DATUM pool over the DATUM protocol
+    and sends it proof of the work your miners do. When anyone mining with
+    the pool finds a block, the reward is split among the pool's miners by
+    their recent work. CONVOY pays each miner's share straight to their
+    address inside that block, once it is above CONVOY's payout threshold.
+    How the split and the threshold work:
+    [convoy.xyz/docs/tides](https://convoy.xyz/docs/tides). If the pool
+    cannot be reached, your miners pause; they do not switch to solo.
+  - **Solo:** nobody else is involved. If your miners find a block, the
+    whole reward is paid straight to your address, inside that block. If
+    they do not, you get nothing. How often you find one depends on your
+    share of all the mining on the network, and there is no payment in
+    between.
 - **Which pool.** CONVOY unless you type another DATUM pool's server address
   and public key, which that pool publishes.
 - **Your short name.** Written into every block you find, where anyone can
