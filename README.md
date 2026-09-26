@@ -25,7 +25,7 @@ listed up front, and the script tells you if any are missing.
   is comfortable; 2 GB and 40 GB is the minimum.
 - Time and data. After the install, your node downloads and checks the
   whole Bitcoin chain before your miners can connect. That takes most of a
-  day and downloads several hundred GB. If your internet plan has a data
+  day and downloads about 800 GB. If your internet plan has a data
   cap, check it first.
 - For a rented server, read "Choosing a server" below first.
 - A Bitcoin address for your rewards.
@@ -134,8 +134,8 @@ with it.
 - Some providers state outright that Bitcoin nodes are allowed. Pick one of
   those, and keep the page that says so.
 
-Check the monthly transfer allowance too. The first sync downloads several
-hundred GB, and some cheap plans cap transfer at 1 TB or charge for more.
+Check the monthly transfer allowance too. The first sync downloads about
+800 GB, and some cheap plans cap transfer at 1 TB or charge for more.
 
 If only your own miners will connect and their address does not change, add
 `--miner-ip THEIR-IP` to the install command, and it prints firewall commands
