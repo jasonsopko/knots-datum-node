@@ -1,5 +1,8 @@
 # knots-datum-node
 
+**Status: in testing, not released yet.** It has not been run end to end on
+a real machine. Wait for version 0.1.0 before relying on it.
+
 Run your own Bitcoin node and DATUM gateway, so the blocks your miners work
 on are built by your node, not by a pool.
 
@@ -46,12 +49,19 @@ As the `miner` user:
     git clone https://github.com/jasonsopko/knots-datum-node installer
     cd installer
     gpg --keyserver hkps://keys.openpgp.org --recv-keys 89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA
-    git verify-tag v0.1.0
-    git checkout v0.1.0
+    git verify-commit HEAD
 
-`git verify-tag` must say `Good signature from "Jason Sopko"`, with key
-`89F0 E41D 72CE 523F 4AA1  CDB6 92CD FFB7 C40C D1BA`. The same key is at
-https://github.com/jasonsopko.gpg.
+The last command must print these two lines (along with a few others):
+
+    gpg: Good signature from "Jason Sopko <jason@sopko.net>" [unknown]
+    Primary key fingerprint: 89F0 E41D 72CE 523F 4AA1  CDB6 92CD FFB7 C40C D1BA
+
+It also warns that the key "is not certified with a trusted signature".
+That is normal: it means you have not told gpg to trust this key, not that
+anything is wrong. What matters is `Good signature` and that fingerprint,
+which you can compare with https://github.com/jasonsopko.gpg.
+
+If it says `BAD signature`, or shows a different fingerprint, stop.
 
 ## Step 3: see what it will do
 
