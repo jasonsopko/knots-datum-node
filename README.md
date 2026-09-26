@@ -1,10 +1,13 @@
 # knots-datum-node
 
-**Status: in testing, not released yet.** It has not been run end to end on
-a real machine. Wait for version 0.1.0 before relying on it.
+**Status: in testing, not released yet.** It installs and runs on a test
+machine, but has not yet been confirmed with a miner mining through it.
+Wait for version 0.1.0 before relying on it.
 
-Run your own Bitcoin node and DATUM gateway, so the blocks your miners work
-on are built by your node, not by a pool.
+Run your own DATUM gateway, so the blocks your miners work on are built by
+your own Bitcoin node, not by a pool. It installs Bitcoin Knots for you, or
+uses a Knots node you already run, and sets up the gateway, a web dashboard
+and a status command.
 
 It runs as an ordinary user. The only steps that need an administrator are
 listed up front, and the script tells you if any are missing.
@@ -17,10 +20,9 @@ listed up front, and the script tells you if any are missing.
 - **You rent hashpower.** The rental service connects to your gateway from the
   internet, so run this on a rented server. (A home computer also works if you
   can forward a port on your router, but a server is simpler.)
-
-**Already run a Bitcoin Knots node** (on this computer, or another one on
-your network, such as an Umbrel or Start9)? The install can use it, and
-skip downloading a second copy of the chain. It asks.
+- **You already run a Bitcoin Knots node**, on this computer or another one
+  on your network, such as an Umbrel or Start9. The install can use it and
+  skip downloading a second copy of the chain. It asks.
 
 ## What you need
 
@@ -28,13 +30,12 @@ skip downloading a second copy of the chain. It asks.
   openSUSE and their relatives all work. For a new node, 4 GB of memory and
   60 GB of free disk is comfortable; 2 GB and 40 GB is the minimum. With a
   node you already run, any small computer will do.
-- Time and data, for a new node. After the install, your node downloads
-  and checks the whole Bitcoin chain before your miners can connect. That takes most of a
-  day and downloads about 800 GB. If your internet plan has a data
-  cap, check it first.
+- For a new node, time and internet data. Before your miners can connect,
+  the node downloads and checks the whole Bitcoin chain: a day or more, and
+  about 800 GB of downloads. If your internet plan has a data cap, check it
+  first.
 - You do not need 800 GB of disk. The node checks each block and then
   deletes the old ones, so it keeps only a small part of what it downloads.
-  The 40 GB above is enough.
 - For a rented server, read "Choosing a server" below first.
 - A Bitcoin address for your rewards.
 
@@ -48,11 +49,11 @@ These are the only commands that need `sudo`. On Debian or Ubuntu:
     sudo loginctl enable-linger miner
     sudo -iu miner
 
-The first two lines install what the node and gateway are built from. The
-next two create an account called `miner` that runs everything, and let its
-programs keep running after you log out. The last one switches to that
-account. On other distributions, skip the two install lines: the script
-prints the right ones for your system in step 4.
+The first two lines install what the gateway, and the node if you want one,
+are built from. The next two create an account called `miner` that runs
+everything, and let its programs keep running after you log out. The last
+one switches to that account. On other distributions, skip the two install
+lines: the script prints the right ones for your system in step 4.
 
 ## Step 2: download it and check the signature
 
@@ -88,21 +89,22 @@ download, file and service the install would create. It changes nothing.
 
 It asks the same questions, then installs. If anything from step 1 is
 missing, it stops and prints the exact commands an administrator needs to
-run. It also prints firewall commands; on a home computer you can ignore
-them.
+run. At the end it prints the addresses you need for steps 6 and 7, and
+firewall commands; on a home computer you can ignore those.
 
 ## Step 5: wait for the sync
 
-Your node now downloads and checks the whole chain. That takes most of a
-day. Check on it with:
+With a new node, it now downloads and checks the whole chain. Check on it
+with:
 
     ~/knots-datum-node/status
 
-Miners cannot connect until it says `synced`.
+Miners cannot connect until it says `synced`. With a node you already run,
+there is no wait if that node is synced.
 
 ## Step 6: point your miners at it
 
-Use the address the install printed at the end. It looks like
+Use the mining address the install printed. It looks like
 `stratum+tcp://192.168.1.50:23334`.
 
 - **ASIC at home:** open your miner's web page, go to its pool settings, and
@@ -112,19 +114,26 @@ Use the address the install printed at the end. It looks like
   password `x`. If your server has a firewall turned on, run the firewall
   commands the install printed first.
 
-## Step 7: check your miners on the dashboard
+## Step 7: check on it in the dashboard
 
-The end of the install, and `~/knots-datum-node/status`, show the
-dashboard's address. At home it looks like `http://192.168.1.50:7152`: open
-it in a web browser and log in as `admin` with your dashboard password.
-Each miner that has connected is listed with its hashrate. If a miner is
-missing, check the pool address you gave it in step 6.
+The gateway has two web pages. The install, `configure` and `status` all
+print their addresses. At home they look like this:
+
+- `http://192.168.1.50:7152` shows the gateway's stats, with no login.
+  "Current Coinbaser" there is the list of addresses a block would pay right
+  now. In pool mode that list comes from the pool: with CONVOY, it is the
+  miners whose share of recent work has passed CONVOY's payout threshold.
+  Your address appears there once yours has, which with a single small
+  miner can take a while; it does not mean anything is wrong.
+- `http://192.168.1.50:7152/clients` lists each connected miner and its
+  hashrate. Log in as `admin` with your dashboard password. If a miner is
+  missing, check the mining address you gave it in step 6.
 
 Forgot the password? `~/knots-datum-node/configure --show-password`.
 
-On a rented server the dashboard is not reachable from the internet. From
-your own computer, run `ssh -L 7152:127.0.0.1:7152 USER@YOUR-SERVER-IP`
-and open `http://127.0.0.1:7152` while that stays connected.
+On a rented server the pages are not reachable from the internet. From your
+own computer, run `ssh -L 7152:127.0.0.1:7152 USER@YOUR-SERVER-IP` and open
+`http://127.0.0.1:7152` while that stays connected.
 
 Safari cannot log in to the dashboard; use Firefox, Chrome or Edge.
 
@@ -140,8 +149,10 @@ brackets.
   calls the gateway needs; you restart the node, and it checks the
   connection. If you cannot edit that node's `bitcoin.conf` (some node
   appliances do not allow it), type the RPC username you already have
-  instead, and it asks for the password.
-
+  instead, and it asks for the password. The gateway uses that node only
+  for block templates and to send in blocks; all its own settings stay on
+  this computer. The node's own policy decides which transactions go in the
+  blocks.
 - **Payout address.** The Bitcoin address your rewards go to.
 - **Pool or solo.** Either way, your own node builds every block your
   miners work on and chooses which transactions go in it.
@@ -163,11 +174,10 @@ brackets.
 - **Your short name.** Written into every block you find, where anyone can
   read it. Leave it empty to stay anonymous. In solo mode it also asks for
   the main name on your blocks.
-- **Dashboard password.** The gateway has a web page showing each connected
-  miner and its hashrate. You log in as `admin` with this password; press
-  Enter to have one made for you. At home it also asks whether other
-  computers on your network may open the page (`network`) or only this one
-  (`local`). On a rented server it stays on the server; see step 7.
+- **Dashboard password.** You log in to the miners page as `admin` with
+  this password; press Enter to have one made for you. At home it also asks
+  whether other computers on your network may open the pages (`network`)
+  or only this one (`local`). On a rented server they stay on the server.
 
 To change any of them later, run:
 
@@ -176,11 +186,35 @@ To change any of them later, run:
 It asks the same questions with your current answers as the suggestions,
 and restarts the gateway with the new ones. Your node keeps running. It can
 also move the gateway from the node this installed to one you already run.
+The dashboard's config page is read-only; settings change only here.
 
-Settings can also be given as flags, for scripted installs:
-`--address`, `--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
-`--pool-pubkey`, and `--node new` or `--node HOST[:PORT] --rpc-user USER`
-with the password in `NODE_RPC_PASSWORD`. See `./install.sh --help`.
+Settings can also be given as flags, for scripted installs: `--address`,
+`--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
+`--pool-pubkey`, `--dashboard network|local`, `--miner-ip`, and
+`--node new` or `--node HOST[:PORT] --rpc-user USER`. Passwords go in the
+`NODE_RPC_PASSWORD` and `DASHBOARD_PASSWORD` environment variables. See
+`./install.sh --help`.
+
+## Updating
+
+As the `miner` user:
+
+    cd ~/installer
+    git pull
+    git verify-commit HEAD
+    ./install.sh
+
+Check the signature as in step 2. The install asks the questions again with
+your current answers as the suggestions, keeps the chain it has already
+downloaded, and restarts with the new version.
+
+## If something is not working
+
+- `~/knots-datum-node/status` says whether the node and the gateway are
+  running, and how far the sync has got.
+- The gateway's log: `journalctl --user -u knots-datum-node-gateway -n 50`
+- The node's log, for a node this installed:
+  `journalctl --user -u knots-datum-node-bitcoind -n 50`
 
 ## Choosing a server
 
@@ -198,20 +232,22 @@ with it.
 - Some providers state outright that Bitcoin nodes are allowed. Pick one of
   those, and keep the page that says so.
 
-Check the monthly transfer allowance too. The first sync downloads about
-800 GB, and some cheap plans cap transfer at 1 TB or charge for more.
+Check the monthly transfer allowance too. The first sync of a new node
+downloads about 800 GB, and some cheap plans cap transfer at 1 TB or charge
+for more.
 
-If only your own miners will connect and their address does not change, add
-`--miner-ip THEIR-IP` to the install command, and it prints firewall commands
-that keep everyone else out.
+The mining port is open to anyone who finds it, the way a pool's is. If
+only your own miners will connect and their address does not change, add
+`--miner-ip THEIR-IP` to the install command, and it prints firewall
+commands that keep everyone else out.
 
 ## What gets downloaded, and how it is checked
 
-The script downloads two things and stops unless both check out:
+The script downloads at most two things and stops unless both check out:
 
 | What | From | Checked by |
 | --- | --- | --- |
-| Bitcoin Knots 29.4.2 | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
+| Bitcoin Knots 29.4.2 (new node only) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
 | DATUM gateway source | github.com/CONVOYMining/datum_gateway | Fetched by exact commit, `6ccfbe55a7e7cd6c066aa428e771a37a22e92277`: CONVOY's code plus the fix in CONVOYMining/datum_gateway#18 |
 
 The only other requests are for Luke's public key (from keys.openpgp.org and
@@ -220,20 +256,23 @@ is no telemetry. `INSTALL.md` walks through the same steps by hand.
 
 ## How it is set up
 
-- A pruned Bitcoin Knots node, in `~/knots-datum-node`.
+Everything lives in `~/knots-datum-node` and runs as user services of the
+`miner` account, starting again after a reboot.
+
+- For a new node, a pruned Bitcoin Knots node.
 - The DATUM gateway, limited by systemd: it cannot gain privileges, run
-  unexpected system calls, or use more than 1 GB of memory, and it accepts at
-  most 256 miner connections. Its login to the node can make only the five
-  calls it needs.
-- Both run as user services of the `miner` account, and start again after a
-  reboot.
+  unexpected system calls, or use more than 1 GB of memory, and it accepts
+  at most 256 miner connections. Its login to the node can make only the
+  eight calls it and the status command need.
+- `status`, and `configure` for changing settings.
 
 ## Removing it
 
     ./install.sh --uninstall
 
 This stops and removes everything except the downloaded chain, and prints the
-command to delete that too.
+command to delete that too. A node you already ran is left alone; the
+gateway's login lines in its `bitcoin.conf` can be deleted by hand.
 
 ## License
 

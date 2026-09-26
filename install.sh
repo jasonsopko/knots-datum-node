@@ -111,7 +111,7 @@ if [ "$NODE" = new ]; then
 	[ "$DISK_GB" -ge 40 ] || { [ $DRY_RUN = 1 ] && echo "warning: a new node needs at least 40 GB free disk (this has ${DISK_GB} GB)"; } || die "a new node needs at least 40 GB free in your home directory (it has ${DISK_GB} GB)."
 	echo
 	echo "Note: after this finishes, the node downloads and checks the whole chain"
-	echo "before miners can connect. That takes most of a day and about 800 GB of"
+	echo "before miners can connect. That takes a day or more and about 800 GB of"
 	echo "internet data. It deletes old blocks as it goes, so it needs far less disk."
 fi
 
@@ -244,7 +244,7 @@ if [ "$NODE" = new ]; then
 	cat <<EOF
 
 Done. Your node is now downloading and checking the whole chain. That takes
-most of a day. To see how far along it is:
+a day or more. To see how far along it is:
 EOF
 else
 	cat <<EOF

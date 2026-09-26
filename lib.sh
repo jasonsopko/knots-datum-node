@@ -317,7 +317,7 @@ settle_node() {	# $1 = 1 if interactive
 Which Bitcoin node should your gateway use?
 
   new       Install Bitcoin Knots here. It downloads and checks the whole
-            chain before your miners can connect: about a day, and about
+            chain before your miners can connect: a day or more, and about
             800 GB of internet data.
 
   existing  Use a Bitcoin Knots node you already run, on this computer or
