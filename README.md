@@ -23,6 +23,10 @@ listed up front, and the script tells you if any are missing.
 - A computer running Linux with systemd: Debian, Ubuntu, Fedora, Arch,
   openSUSE and their relatives all work. 4 GB of memory and 60 GB of free disk
   is comfortable; 2 GB and 40 GB is the minimum.
+- Time and data. After the install, your node downloads and checks the
+  whole Bitcoin chain before your miners can connect. That takes most of a
+  day and downloads several hundred GB. If your internet plan has a data
+  cap, check it first.
 - For a rented server, read "Choosing a server" below first.
 - A Bitcoin address for your rewards.
 
