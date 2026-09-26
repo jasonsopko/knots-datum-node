@@ -1,9 +1,5 @@
 # knots-datum-node
 
-**Status: in testing, not released yet.** It installs and runs on a test
-machine, but has not yet been confirmed with a miner mining through it.
-Wait for version 0.1.0 before relying on it.
-
 Run your own DATUM gateway, so the blocks your miners work on are built by
 your own Bitcoin node, not by a pool. It installs Bitcoin Knots for you, or
 uses a Knots node you already run, and sets up the gateway, a web dashboard
