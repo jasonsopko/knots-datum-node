@@ -14,8 +14,9 @@
 # Settings can also be given as flags, which skips the questions when there is
 # no terminal: --address <address> --mode pool|solo [--tag <your name>]
 # [--primary-tag <name>] [--pool-host <host[:port]> --pool-pubkey <hex>]
-# [--node new | --node <host[:port]> --rpc-user <user>, with the password in
-# the NODE_RPC_PASSWORD environment variable, to use a node you already run]
+# [--shared yes|no] [--node new | --node <host[:port]> --rpc-user <user>,
+# with the password in the NODE_RPC_PASSWORD environment variable, to use a
+# node you already run]
 #
 # The mining port is open to anyone by default, like a pool's.
 # --miner-ip <IP or range> (repeatable) prints firewall commands that limit it
@@ -36,7 +37,7 @@ while [ $# -gt 0 ]; do
 		--dry-run) DRY_RUN=1; shift ;;
 		--uninstall) UNINSTALL=1; shift ;;
 		--no-prompt) NO_PROMPT=1; shift ;;
-		-h|--help) sed -n '3,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) die "unknown option $1 (see ./install.sh --help)" ;;
 	esac
 done
@@ -239,7 +240,6 @@ user_systemctl restart "${UNITS_TO_START[@]}"
 sleep 3
 user_systemctl is-active --quiet "$GW_UNIT" || die "the gateway did not start; see: journalctl --user -u $GW_UNIT"
 
-SHOW_IP=${OWN_IP:-"<this computer's IP>"}
 if [ "$NODE" = new ]; then
 	cat <<EOF
 
@@ -259,8 +259,7 @@ cat <<EOF
 
 When it says "synced", point your miners at:
 
-    stratum+tcp://$SHOW_IP:$STRATUM_PORT
-    username: any name for the miner   password: x
+$(miner_login_help)
 
 To change your node, payout address, pool, name or dashboard later:
 

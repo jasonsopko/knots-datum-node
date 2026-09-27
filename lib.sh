@@ -87,10 +87,12 @@ require_python() {
 # ADDRESS, MODE (pool or solo), POOL_HOST/POOL_PORT/POOL_PUBKEY (empty host
 # means CONVOY, the gateway's default), TAG1 (primary coinbase tag, used in
 # solo mode only; a pool puts its own there), TAG2 (secondary tag), UNIQUE_ID.
+# SHARED (yes or no, pool mode only): whether miners' usernames go to the pool
+# as their own payout addresses, so other people can mine through this gateway.
 # Command line flags go in F_* and win over whatever is already saved.
 
 F_ADDRESS= F_MODE= F_POOL_HOST= F_POOL_PUBKEY= F_TAG1= F_TAG2= F_TAG1_SET=0 F_TAG2_SET=0
-F_NODE= F_RPC_USER= F_DASH_OPEN=
+F_NODE= F_RPC_USER= F_DASH_OPEN= F_SHARED=
 
 # Handles one settings flag. Returns 1 if $1 is not one, so callers can go on
 # to their own flags. Sets SHIFT to how many arguments it used.
@@ -106,6 +108,7 @@ parse_setting_flag() {
 		--node) F_NODE=${2-} ;;
 		--rpc-user) F_RPC_USER=${2-} ;;
 		--dashboard) F_DASH_OPEN=${2-} ;;
+		--shared) F_SHARED=${2-} ;;
 		*) return 1 ;;
 	esac
 	[ $# -ge 2 ] || die "$1 needs a value"
@@ -114,7 +117,7 @@ parse_setting_flag() {
 # Saved settings from an earlier install, if there are any.
 load_saved_settings() {
 	S_ADDRESS= S_MODE= S_POOL_HOST= S_POOL_PORT= S_POOL_PUBKEY= S_TAG1= S_TAG2= S_UNIQUE_ID= S_RPC_PASS= S_API_PASS=
-	S_RPC_URL= S_RPC_USER= S_NODE= S_DASH_OPEN=
+	S_RPC_URL= S_RPC_USER= S_NODE= S_DASH_OPEN= S_SHARED=
 	HAVE_SAVED=0
 	[ -f "$CONF/datum_gateway.json" ] || return 0
 	eval "$(python3 - "$CONF/datum_gateway.json" "$CONVOY_HOST" <<'PY'
@@ -137,6 +140,7 @@ v = {
 	"S_RPC_USER": b.get("rpcuser", ""),
 	"S_API_PASS": a.get("admin_password", ""),
 	"S_DASH_OPEN": "local" if a.get("listen_addr", "127.0.0.1") == "127.0.0.1" else "network",
+	"S_SHARED": "yes" if host and d.get("pool_pass_full_users", True) else "no",
 }
 for k, val in v.items():
 	print("%s=%s" % (k, shlex.quote(val)))
@@ -201,6 +205,10 @@ check_dash_open() {
 check_mode() {
 	case "$1" in pool|solo) return 0 ;; esac
 	echo "type pool or solo"; return 1
+}
+check_shared() {
+	case "$1" in yes|no) return 0 ;; esac
+	echo "type yes or no"; return 1
 }
 check_tag() {	# $1 = tag, $2 = what to call it
 	local LC_ALL=C
@@ -433,6 +441,7 @@ settle_settings() {
 
 	ADDRESS=${F_ADDRESS:-$S_ADDRESS}
 	MODE=${F_MODE:-${S_MODE:-pool}}
+	SHARED=${F_SHARED:-${S_SHARED:-no}}
 	POOL_HOST=${S_POOL_HOST} POOL_PORT=${S_POOL_PORT} POOL_PUBKEY=${S_POOL_PUBKEY}
 	[ -z "$F_POOL_HOST" ] || POOL_HOST=$F_POOL_HOST POOL_PORT=
 	[ -z "$F_POOL_PUBKEY" ] || POOL_PUBKEY=$F_POOL_PUBKEY
@@ -491,6 +500,22 @@ TEXT
 				check_pool_host "$answer" >/dev/null
 				ask POOL_PUBKEY "That pool's public key (its operator publishes it)" "$POOL_PUBKEY" check_pubkey
 			fi
+			echo
+			cat <<'TEXT'
+Will other people mine through this gateway, each paid to their own address?
+
+  no   Every miner here is yours. Miners can use any name, and all their
+       work is credited to your payout address.
+
+  yes  Each miner types its own Bitcoin address as its username, and the
+       pool pays that address directly. You never hold anyone's reward.
+       Your own miners can use a name that starts with a dot, such as
+       .rig1, to be credited to your payout address. A miner that types
+       anything else, even a mistyped address, mines for nobody: the pool
+       takes the work and credits no one, with no error.
+
+TEXT
+			ask SHARED "yes or no" "$SHARED" check_shared
 		else
 			echo
 			echo "Solo blocks carry a name in them that anyone can read."
@@ -544,6 +569,13 @@ TEXT
 	[ -n "$ADDRESS" ] || die "a payout address is needed: run this in a terminal to be asked, or pass --address"
 	msg=$(check_address "$ADDRESS") || die "$msg"
 	msg=$(check_mode "$MODE") || die "$msg"
+	msg=$(check_shared "$SHARED") || die "--shared: $msg"
+	if [ "$MODE" = solo ]; then
+		# In solo mode every block pays the payout address alone; sharing
+		# would mean holding other people's rewards.
+		[ "$F_SHARED" != yes ] || die "--shared yes needs pool mode: in solo mode the whole reward goes to your payout address"
+		SHARED=no
+	fi
 	msg=$(check_tag "$TAG1" "the primary tag") || die "$msg"
 	msg=$(check_tag "$TAG2" "the secondary tag") || die "$msg"
 	[ $(( ${#TAG1} + ${#TAG2} )) -le 88 ] || die "the two tags together can be 88 characters at most"
@@ -580,11 +612,24 @@ dashboard_help() {	# how to open it, for the end of install and configure
 	echo "  (Safari cannot log in; use Firefox, Chrome or Edge.)"
 	echo "Settings are changed with ~/knots-datum-node/configure, not on the page."
 }
+miner_login_help() {	# what to type into a miner, for the end of install and configure
+	local ip=${OWN_IP:-"<this computer's IP>"}
+	echo "    stratum+tcp://$ip:$STRATUM_PORT"
+	if [ "$SHARED" = yes ]; then
+		echo "    username: the miner owner's own Bitcoin address, copied from"
+		echo "              their wallet, optionally followed by .name"
+		echo "              (a username that starts with a dot is paid to you)"
+		echo "    password: x"
+	else
+		echo "    username: any name for the miner   password: x"
+	fi
+}
 show_settings() {
 	if [ "$NODE" = new ]; then echo "  node:           new, installed here"; else echo "  node:           existing, at $NODE_HOST:$NODE_PORT (login $RPC_USER)"; fi
 	echo "  payout address: $ADDRESS"
 	if [ "$MODE" = pool ]; then
 		if [ -n "$POOL_HOST" ]; then echo "  mining:         pool, $POOL_HOST:$POOL_PORT"; else echo "  mining:         pool, CONVOY"; fi
+		if [ "$SHARED" = yes ]; then echo "  shared:         yes, each miner paid to its own address"; else echo "  shared:         no, all work paid to your address"; fi
 	else
 		echo "  mining:         solo, blocks named \"$TAG1\""
 	fi
@@ -615,8 +660,11 @@ EOF
 render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
 	local datum
 	if [ "$MODE" = pool ]; then
-		# miners' worker names are appended to the payout address as <address>.<worker>
-		datum='"pool_pass_workers": true, "pool_pass_full_users": false, "pooled_mining_only": true'
+		# Not shared: miners' names are appended to the payout address as
+		# <address>.<name>. Shared: a miner's username goes to the pool as
+		# is, so its address is paid; one that starts with a dot still gets
+		# the payout address in front.
+		datum="\"pool_pass_workers\": true, \"pool_pass_full_users\": $( [ "$SHARED" = yes ] && echo true || echo false ), \"pooled_mining_only\": true"
 		if [ -n "$POOL_HOST" ]; then
 			datum+=", \"pool_host\": \"$POOL_HOST\", \"pool_port\": $POOL_PORT, \"pool_pubkey\": \"$POOL_PUBKEY\""
 		else
@@ -733,6 +781,7 @@ fi
 if systemctl --user is-active --quiet $GW_UNIT; then echo "gateway: running, dashboard at $(dashboard_url)"; else echo "gateway: NOT running"; fi
 echo "payout address: $ADDRESS"
 $( [ "$MODE" = pool ] && [ -z "$POOL_HOST" ] && echo "echo \"your CONVOY stats: https://convoy.xyz/stats/$ADDRESS\"" )
+$( [ "$SHARED" = yes ] && echo "echo \"shared: each miner is paid to the address in its username; check them on the miners page\"" )
 # The gateway logs errors while the node syncs; they only matter once it has.
 [ \$synced = yes ] && journalctl --user -u $GW_UNIT -n 5 --no-pager -o cat 2>/dev/null
 exit 0

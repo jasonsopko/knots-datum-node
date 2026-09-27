@@ -12,7 +12,7 @@
 # [--tag <your name>] [--primary-tag <name>]
 # [--pool-host <host[:port]> --pool-pubkey <hex>]
 # [--node <host[:port]> --rpc-user <user>, password in NODE_RPC_PASSWORD]
-# [--dashboard network|local] [--no-prompt]
+# [--dashboard network|local] [--shared yes|no] [--no-prompt]
 # --show-password prints the dashboard address and password, and exits.
 set -euo pipefail
 SRC_DIR=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
@@ -68,6 +68,9 @@ if user_systemctl is-active --quiet "$GW_UNIT"; then
 else
 	echo "Saved. They take effect when the gateway next starts."
 fi
+echo
+echo "Miners connect with:"
+miner_login_help
 echo
 dashboard_help
 FW=$(firewall_commands | grep -E -- ":?$API_PORT|--reload" || true)

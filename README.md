@@ -109,6 +109,9 @@ Use the mining address the install printed. It looks like
   `stratum+tcp://YOUR-SERVER-IP:23334` as the pool, with any worker name and
   password `x`. If your server has a firewall turned on, run the firewall
   commands the install printed first.
+- **Other people's miners,** with sharing turned on: the same pool URL,
+  and the owner's own Bitcoin address as the username. See "Letting other
+  people mine through your gateway".
 
 ## Step 7: check on it in the dashboard
 
@@ -175,7 +178,7 @@ address, and it can be spent 100 blocks later.
 
 ## Your settings
 
-The install asks six things. Press Enter to take the suggestion in
+The install asks seven things. Press Enter to take the suggestion in
 brackets.
 
 - **Which node.** `new` installs Bitcoin Knots here. `existing` uses a
@@ -214,6 +217,10 @@ brackets.
     between.
 - **Which pool.** CONVOY unless you type another DATUM pool's server address
   and public key, which that pool publishes.
+- **Shared.** Pool mode only. `yes` lets other people mine through your
+  gateway, each paid to their own address; see "Letting other people mine
+  through your gateway" below. `no` credits all work here to your payout
+  address.
 - **Your short name.** Written into every block you find, where anyone can
   read it. Leave it empty to stay anonymous. In solo mode it also asks for
   the main name on your blocks.
@@ -233,7 +240,8 @@ The dashboard's config page is read-only; settings change only here.
 
 Settings can also be given as flags, for scripted installs: `--address`,
 `--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
-`--pool-pubkey`, `--dashboard network|local`, `--miner-ip`, and
+`--pool-pubkey`, `--shared yes|no`, `--dashboard network|local`,
+`--miner-ip`, and
 `--node new` or `--node HOST[:PORT] --rpc-user USER`. Passwords go in the
 `NODE_RPC_PASSWORD` and `DASHBOARD_PASSWORD` environment variables. See
 `./install.sh --help`.
@@ -258,6 +266,48 @@ downloaded, and restarts with the new version.
 - The gateway's log: `journalctl --user -u knots-datum-node-gateway -n 50`
 - The node's log, for a node this installed:
   `journalctl --user -u knots-datum-node-bitcoind -n 50`
+
+## Letting other people mine through your gateway
+
+In pool mode, family, friends or a mining club can point their miners at
+your gateway and be paid to their own addresses. Answer `yes` to "shared"
+during the install, or later with `~/knots-datum-node/configure`.
+
+- Each person types their own Bitcoin address as their miner's username,
+  copied from their wallet, optionally followed by `.name` (for example
+  `bc1q....rig1`). Password `x`.
+- The pool pays each address directly, inside the blocks it finds. Their
+  earnings never pass through you.
+- Your own miners can keep using plain names if they start with a dot,
+  such as `.rig1`; those are credited to your payout address.
+- Any other username, including a mistyped address, mines for nobody.
+  CONVOY accepts the work and credits no one, with no error. After anyone
+  connects, check the usernames on the miners page (`/clients`), and have
+  each person check their own stats page as in "Check that you are being
+  paid".
+- People outside your home network can reach the gateway only if your
+  router forwards the mining port (23334) to it. On a rented server, run
+  the firewall commands the install printed.
+
+Sharing is not offered in solo mode. There every block pays your address
+alone, so sharing would mean holding other people's rewards and paying
+them yourself.
+
+What the people mining through you should know:
+
+- Your node builds the blocks they work on, so your node chooses the
+  transactions.
+- They are trusting you to leave sharing on. With it off, their work is
+  credited to your address. Their stats page would show it within minutes:
+  hashrate there drops to zero while their miner keeps running.
+- If the pool cannot be reached, the gateway disconnects every miner; it
+  does not switch to solo mining for your address.
+- CONVOY's terms do not allow reselling its service, so do not charge
+  people to mine through your gateway.
+
+For people you do not know, their own node, or CONVOY's own connection,
+is the better choice. Every miner on a shared gateway works on one node's
+blocks.
 
 ## Choosing a server
 
