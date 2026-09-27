@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--no-prompt) NO_PROMPT=1; shift ;;
 		--show-password) SHOW_PASSWORD=1; shift ;;
-		-h|--help) sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) die "unknown option $1 (see configure --help)" ;;
 	esac
 done

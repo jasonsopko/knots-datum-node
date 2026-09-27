@@ -36,7 +36,7 @@ while [ $# -gt 0 ]; do
 		--dry-run) DRY_RUN=1; shift ;;
 		--uninstall) UNINSTALL=1; shift ;;
 		--no-prompt) NO_PROMPT=1; shift ;;
-		-h|--help) sed -n '3,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '3,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) die "unknown option $1 (see ./install.sh --help)" ;;
 	esac
 done
