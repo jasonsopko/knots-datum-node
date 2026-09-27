@@ -126,12 +126,15 @@ j = json.load(open(sys.argv[1]))
 m, d, b, a = j.get("mining", {}), j.get("datum", {}), j.get("bitcoind", {}), j.get("api", {})
 host = d.get("pool_host")
 mode = "solo" if host == "" else "pool"
+# CONVOY is written out in full but read back as empty, the gateway default,
+# with its port and key, so a later switch to another pool asks for its key.
+other = "" if host == sys.argv[2] else (host or "")
 v = {
 	"S_ADDRESS": m.get("pool_address", ""),
 	"S_MODE": mode,
-	"S_POOL_HOST": "" if host == sys.argv[2] else (host or ""),
-	"S_POOL_PORT": str(d.get("pool_port", "")) if host else "",
-	"S_POOL_PUBKEY": d.get("pool_pubkey", "") if host else "",
+	"S_POOL_HOST": other,
+	"S_POOL_PORT": str(d.get("pool_port", "")) if other else "",
+	"S_POOL_PUBKEY": d.get("pool_pubkey", "") if other else "",
 	"S_TAG1": m.get("coinbase_tag_primary", ""),
 	"S_TAG2": m.get("coinbase_tag_secondary", ""),
 	"S_UNIQUE_ID": str(m.get("coinbase_unique_id", "")),
