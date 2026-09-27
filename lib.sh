@@ -149,9 +149,42 @@ PY
 
 check_address() {
 	[ "$1" != YOUR-ADDRESS ] || { echo "replace YOUR-ADDRESS with your own Bitcoin address"; return 1; }
-	[[ "$1" =~ ^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$ ]] && return 0
-	echo "${1:-that} does not look like a Bitcoin address. Use the address your mining rewards should go to; it starts with bc1, 1 or 3."
+	if ! [[ "$1" =~ ^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$ ]]; then
+		echo "${1:-that} does not look like a Bitcoin address. Use the address your mining rewards should go to; it starts with bc1, 1 or 3."
+		return 1
+	fi
+	address_checksum_ok "$1" && return 0
+	echo "$1 has a typo in it: its checksum does not match. Copy it from your wallet again; do not type it by hand."
 	return 1
+}
+# The checksum built into every address (bech32/bech32m for bc1, base58check
+# for 1 and 3) catches almost any typo. The gateway checks it too, but only
+# after the install, by refusing to start.
+address_checksum_ok() {
+	python3 - "$1" <<'PY'
+import hashlib, sys
+a = sys.argv[1]
+if a.startswith("bc1"):
+	cs = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+	def polymod(v):
+		c = 1
+		for x in v:
+			b = c >> 25
+			c = (c & 0x1ffffff) << 5 ^ x
+			for i in range(5):
+				c ^= (0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3)[i] if (b >> i) & 1 else 0
+		return c
+	d = [cs.index(ch) for ch in a[3:]]
+	k = polymod([3, 3, 0, 2, 3] + d)
+	# witness v0 uses bech32, v1 and later bech32m
+	sys.exit(0 if (d[0] == 0 and k == 1) or (d[0] != 0 and k == 0x2bc830a3) else 1)
+alpha = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+n = 0
+for ch in a:
+	n = n * 58 + alpha.index(ch)
+raw = n.to_bytes(25, "big") if n.bit_length() <= 200 else b""
+sys.exit(0 if len(raw) == 25 and raw[0] in (0, 5) and hashlib.sha256(hashlib.sha256(raw[:21]).digest()).digest()[:4] == raw[21:] else 1)
+PY
 }
 check_dash_password() {
 	local LC_ALL=C
@@ -414,6 +447,12 @@ settle_settings() {
 	settle_node $interactive
 	if [ $interactive = 1 ]; then
 		echo
+		cat <<'TEXT'
+Your payout address is where every reward goes. Take it from a wallet you
+control and copy and paste it; do not type it. Nobody can send back a
+reward paid to a wrong address, and a pool pays out on whatever address it
+is given without checking that it is yours.
+TEXT
 		ask ADDRESS "Bitcoin address for your mining rewards" "$ADDRESS" check_address
 		echo
 		cat <<'TEXT'
