@@ -116,7 +116,7 @@ The gateway has two web pages. The install, `configure` and `status` all
 print their addresses. At home they look like this:
 
 - `http://192.168.1.50:7152` shows the gateway's stats, with no login.
-  "Current Coinbaser" there is the list of addresses a block would pay right
+  Its Coinbaser page is the list of addresses a block would pay right
   now. In pool mode that list comes from the pool: with CONVOY, it is the
   miners whose share of recent work has passed CONVOY's payout threshold.
   Your address appears there once yours has, which with a single small
@@ -132,6 +132,46 @@ own computer, run `ssh -L 7152:127.0.0.1:7152 USER@YOUR-SERVER-IP` and open
 `http://127.0.0.1:7152` while that stays connected.
 
 Safari cannot log in to the dashboard; use Firefox, Chrome or Edge.
+
+## Check that you are being paid
+
+Do this once your miners are running, and again after any change to your
+settings. Start with:
+
+    ~/knots-datum-node/status
+
+It prints the payout address the gateway is using. Compare it character
+for character with the receiving address your wallet shows. If they
+differ, fix it with `~/knots-datum-node/configure` before anything else.
+
+**Pool mode, with CONVOY.** `status` also prints your stats page,
+`https://convoy.xyz/stats/YOUR-ADDRESS`.
+
+1. Within about 15 minutes of your miners starting, the page lists them
+   under "Workers" and "Work In Reward Window" starts to grow. The 60-second
+   and 5-minute hashrates there should come close to what your miners
+   report; the 3-hour figure takes three hours to catch up.
+2. Each time CONVOY finds a block, it appears under "Latest Earnings" with
+   your part of it. These add up under "Unpaid Earnings" until they pass
+   the payout threshold of 0.01048576 BTC.
+3. Once they do, your address shows up on your gateway's Coinbaser page
+   (`http://192.168.1.50:7152/coinbaser` at home). That is the list of
+   payments in the block your own node is working on right now, so you
+   can see your share before a block is found, not only after.
+4. After the next CONVOY block, look up your address on a block explorer
+   that follows this chain, such as [mempool.guide](https://mempool.guide).
+   The payment is an output of that block's first transaction. It can be
+   spent 100 blocks later.
+
+If your miners show hashrate on `/clients` but the stats page stays empty
+after half an hour, the address is the first thing to check. CONVOY takes
+work sent under any name, including a wrong address, and gives no error.
+The work is not credited to anyone.
+
+**Solo mode.** Your gateway's Coinbaser page should list a single
+payment: the whole reward, to your address. If your miners find a block,
+look it up on the block explorer: the block's first transaction pays your
+address, and it can be spent 100 blocks later.
 
 ## Your settings
 
@@ -149,7 +189,14 @@ brackets.
   for block templates and to send in blocks; all its own settings stay on
   this computer. The node's own policy decides which transactions go in the
   blocks.
-- **Payout address.** The Bitcoin address your rewards go to.
+- **Payout address.** The Bitcoin address your rewards go to, in pool
+  mode and solo alike. This is the one setting that decides who gets paid,
+  so take it from a wallet you control and copy and paste it. A reward paid
+  to a wrong address cannot be sent back, and a pool pays whatever address
+  it is given without checking that it is yours. The install checks the
+  address's built-in checksum, which catches almost any typo, but it
+  cannot tell whether the address is yours. See "Check that you are being
+  paid" below.
 - **Pool or solo.** Either way, your own node builds every block your
   miners work on and chooses which transactions go in it.
   - **Pool:** your gateway connects to a DATUM pool over the DATUM protocol

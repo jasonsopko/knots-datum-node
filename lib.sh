@@ -731,6 +731,8 @@ else
 	echo "connected to \$(rpc getconnectioncount) other nodes"
 fi
 if systemctl --user is-active --quiet $GW_UNIT; then echo "gateway: running, dashboard at $(dashboard_url)"; else echo "gateway: NOT running"; fi
+echo "payout address: $ADDRESS"
+$( [ "$MODE" = pool ] && [ -z "$POOL_HOST" ] && echo "echo \"your CONVOY stats: https://convoy.xyz/stats/$ADDRESS\"" )
 # The gateway logs errors while the node syncs; they only matter once it has.
 [ \$synced = yes ] && journalctl --user -u $GW_UNIT -n 5 --no-pager -o cat 2>/dev/null
 exit 0
