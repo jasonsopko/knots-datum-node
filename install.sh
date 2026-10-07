@@ -189,7 +189,8 @@ echo "SHA256SUMS signed by $KNOTS_FPR"
 grep " $TARBALL\$" SHA256SUMS | sha256sum -c - || die "download does not match SHA256SUMS"
 tar xzf "$TARBALL"
 install -m 755 "bitcoin-$KNOTS_VER/bin/bitcoind" "bitcoin-$KNOTS_VER/bin/bitcoin-cli" "$BIN/"
-"$BIN/bitcoind" -version | head -1
+# The work dir as datadir, so this neither reads nor writes ~/.bitcoin.
+"$BIN/bitcoind" -datadir="$WORK" -version | sed -n 1p
 fi
 
 say "building the DATUM gateway at $GW_COMMIT"
