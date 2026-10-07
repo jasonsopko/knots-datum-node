@@ -16,7 +16,8 @@
 # [--primary-tag <name>] [--pool-host <host[:port]> --pool-pubkey <hex>]
 # [--shared yes|no] [--node new | --node <host[:port]> --rpc-user <user>,
 # with the password in the NODE_RPC_PASSWORD environment variable, to use a
-# node you already run]
+# node you already run] [--software plumb|knots, for a new node: Plumb unless
+# this node already runs Knots; ARM computers get Knots]
 #
 # The mining port is open to anyone by default, like a pool's.
 # --miner-ip <IP or range> (repeatable) prints firewall commands that limit it
@@ -37,7 +38,8 @@ while [ $# -gt 0 ]; do
 		--dry-run) DRY_RUN=1; shift ;;
 		--uninstall) UNINSTALL=1; shift ;;
 		--no-prompt) NO_PROMPT=1; shift ;;
-		-h|--help) sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		--software) [ $# -ge 2 ] || die "--software needs a value"; check_software "$2" >/dev/null || die "--software must be plumb or knots"; F_SOFTWARE=$2; shift 2 ;;
+		-h|--help) sed -n '3,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) die "unknown option $1 (see ./install.sh --help)" ;;
 	esac
 done
@@ -82,7 +84,6 @@ DISK_GB=$(df -BG --output=avail "$HOME_DIR" | tail -1 | tr -dc 0-9)
 echo "user $(id -un), RAM ${MEM_MB} MB, free disk ${DISK_GB} GB, $(nproc) CPUs"
 # dbcache: about a quarter of RAM, 450 MB floor, 4000 MB ceiling
 DBCACHE=$(( MEM_MB / 4 )); [ $DBCACHE -lt 450 ] && DBCACHE=450; [ $DBCACHE -gt 4000 ] && DBCACHE=4000
-TARBALL=bitcoin-$KNOTS_VER-$ARCH.tar.gz
 
 # What an administrator has to do first. Collect everything missing and print
 # it at once, so nobody has to go back and forth.
@@ -103,7 +104,9 @@ fi
 
 say "your settings"
 load_saved_settings
+CHOOSE_SOFTWARE=1
 settle_settings
+[ "$NODE" != new ] || TARBALL=bitcoin-$NODE_VER-$ARCH.tar.gz
 echo
 show_settings
 
@@ -123,15 +126,17 @@ if [ $DRY_RUN = 1 ]; then
 DRY RUN: nothing below has been done. A real run does this, in order, as
 user $(id -un), without root.
 
-== 1. download Bitcoin Knots $KNOTS_VER
+== 1. download the node
 EOF
 	if [ "$NODE" = new ]; then cat <<EOF
-$KNOTS_BASE/SHA256SUMS
-$KNOTS_BASE/SHA256SUMS.asc
-$KNOTS_BASE/$TARBALL
+$NODE_NAME $NODE_VER, from:
+$NODE_BASE/SHA256SUMS
+$NODE_BASE/SHA256SUMS.asc
+$NODE_BASE/$TARBALL
 Stops unless SHA256SUMS.asc is a valid signature by
-$KNOTS_FPR (Luke Dashjr, Knots release key) and the download matches its
-line in SHA256SUMS. Puts bitcoind and bitcoin-cli in $BIN.
+$NODE_FPR ($NODE_SIGNER)
+and the download matches its line in SHA256SUMS. Puts bitcoind and
+bitcoin-cli in $BIN.
 EOF
 	else echo "Skipped: the gateway uses your node at $NODE_HOST:$NODE_PORT."; fi
 	cat <<EOF
@@ -175,20 +180,21 @@ WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
 cd "$WORK"
 if [ "$NODE" = new ]; then
-say "downloading Bitcoin Knots $KNOTS_VER"
-curl -sSfO "$KNOTS_BASE/SHA256SUMS"
-curl -sSfO "$KNOTS_BASE/SHA256SUMS.asc"
-curl -sSfO "$KNOTS_BASE/$TARBALL"
+say "downloading $NODE_NAME $NODE_VER"
+# -L: GitHub serves release files through a redirect.
+curl -sSfLO "$NODE_BASE/SHA256SUMS"
+curl -sSfLO "$NODE_BASE/SHA256SUMS.asc"
+curl -sSfLO "$NODE_BASE/$TARBALL"
 export GNUPGHOME=$WORK/gnupg; mkdir -m 700 "$GNUPGHOME"
-curl -sSf "$KNOTS_KEY_URL" | gpg -q --import 2>/dev/null || true
-gpg -q --keyserver hkps://keys.openpgp.org --recv-keys "$KNOTS_FPR" 2>/dev/null || true
+curl -sSfL "$NODE_KEY_URL" | gpg -q --import 2>/dev/null || true
+gpg -q --keyserver hkps://keys.openpgp.org --recv-keys "$NODE_FPR" 2>/dev/null || true
 # Only a signature by this exact key counts, wherever the key came from.
 VERIFY=$(gpg --status-fd 1 --verify SHA256SUMS.asc SHA256SUMS 2>/dev/null || true)
-grep -q "^\[GNUPG:\] VALIDSIG $KNOTS_FPR " <<<"$VERIFY" || die "SHA256SUMS is not signed by $KNOTS_FPR"
-echo "SHA256SUMS signed by $KNOTS_FPR"
+grep -q "^\[GNUPG:\] VALIDSIG $NODE_FPR " <<<"$VERIFY" || die "SHA256SUMS is not signed by $NODE_FPR"
+echo "SHA256SUMS signed by $NODE_FPR ($NODE_SIGNER)"
 grep " $TARBALL\$" SHA256SUMS | sha256sum -c - || die "download does not match SHA256SUMS"
 tar xzf "$TARBALL"
-install -m 755 "bitcoin-$KNOTS_VER/bin/bitcoind" "bitcoin-$KNOTS_VER/bin/bitcoin-cli" "$BIN/"
+install -m 755 "bitcoin-$NODE_VER/bin/bitcoind" "bitcoin-$NODE_VER/bin/bitcoin-cli" "$BIN/"
 # The work dir as datadir, so this neither reads nor writes ~/.bitcoin.
 "$BIN/bitcoind" -datadir="$WORK" -version | sed -n 1p
 fi

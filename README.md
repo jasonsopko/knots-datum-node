@@ -1,9 +1,11 @@
 # knots-datum-node
 
 Run your own DATUM gateway, so the blocks your miners work on are built by
-your own Bitcoin node, not by a pool. It installs Bitcoin Knots for you, or
-uses a Knots node you already run, and sets up the gateway, a web dashboard
-and a status command.
+your own Bitcoin node, not by a pool. It installs a node for you, or uses a
+Knots node you already run, and sets up the gateway, a web dashboard and a
+status command. A new node is [Plumb](https://github.com/plumb-node/plumb),
+Bitcoin Knots with extra spam filters, unless you choose Knots as released
+or the computer is ARM, which gets Knots.
 
 It runs as an ordinary user. The only steps that need an administrator are
 listed up front, and the script tells you if any are missing.
@@ -178,10 +180,10 @@ address, and it can be spent 100 blocks later.
 
 ## Your settings
 
-The install asks seven things. Press Enter to take the suggestion in
+The install asks eight things. Press Enter to take the suggestion in
 brackets.
 
-- **Which node.** `new` installs Bitcoin Knots here. `existing` uses a
+- **Which node.** `new` installs a node here. `existing` uses a
   Knots node you already run (version 29.4.1 or later), here or on your
   network. For an existing node it makes a login only for the gateway and
   prints the lines to add to that node's `bitcoin.conf`, limited to the
@@ -192,6 +194,17 @@ brackets.
   for block templates and to send in blocks; all its own settings stay on
   this computer. The node's own policy decides which transactions go in the
   blocks.
+- **Node software.** New node only. `plumb`, the suggestion, installs
+  [Plumb](https://github.com/plumb-node/plumb): Bitcoin Knots plus the spam
+  filters listed in its README, all turned on, so your node leaves more spam
+  out of the blocks it builds and does not pass it on. It follows the same
+  chain as Knots and keeps the same data, so you can switch either way by
+  running the install again. `knots` installs Bitcoin Knots as released.
+  Plumb's release is built and signed by Jason Sopko, who also signs this
+  installer; it is one person's build, not a reproducible one. Knots'
+  release is signed by Luke Dashjr. Plumb is built for x86_64 only, so ARM
+  computers get Knots without being asked. When you update, it suggests
+  the one you run now.
 - **Payout address.** The Bitcoin address your rewards go to, in pool
   mode and solo alike. This is the one setting that decides who gets paid,
   so take it from a wallet you control and copy and paste it. A reward paid
@@ -229,7 +242,7 @@ brackets.
   whether other computers on your network may open the pages (`network`)
   or only this one (`local`). On a rented server they stay on the server.
 
-To change any of them later, run:
+To change any of them later, except the node software, run:
 
     ~/knots-datum-node/configure
 
@@ -241,7 +254,7 @@ The dashboard's config page is read-only; settings change only here.
 Settings can also be given as flags, for scripted installs: `--address`,
 `--mode pool|solo`, `--tag`, `--primary-tag`, `--pool-host`,
 `--pool-pubkey`, `--shared yes|no`, `--dashboard network|local`,
-`--miner-ip`, and
+`--miner-ip`, `--software plumb|knots` (new node only), and
 `--node new` or `--node HOST[:PORT] --rpc-user USER`. Passwords go in the
 `NODE_RPC_PASSWORD` and `DASHBOARD_PASSWORD` environment variables. See
 `./install.sh --help`.
@@ -257,7 +270,8 @@ As the `miner` user:
 
 Check the signature as in step 2. The install asks the questions again with
 your current answers as the suggestions, keeps the chain it has already
-downloaded, and restarts with the new version.
+downloaded, and restarts with the new version. A node running Knots stays on
+Knots unless you answer `plumb`.
 
 ## If something is not working
 
@@ -340,19 +354,22 @@ The script downloads at most two things and stops unless both check out:
 
 | What | From | Checked by |
 | --- | --- | --- |
-| Bitcoin Knots 29.4.2 (new node only) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
+| Plumb 29.4.2.knots20260508.plumb6 (new node, unless you choose Knots) | github.com/plumb-node/plumb releases | The list of file hashes must be signed by Jason Sopko's key `89F0 E41D 72CE 523F 4AA1 CDB6 92CD FFB7 C40C D1BA`, and the download must match it |
+| Bitcoin Knots 29.4.2 (new node, if you choose it, and on ARM) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
 | DATUM gateway source | github.com/CONVOYMining/datum_gateway | Fetched by exact commit, `6ccfbe55a7e7cd6c066aa428e771a37a22e92277`: CONVOY's code plus the fix in CONVOYMining/datum_gateway#18 |
 
-The only other requests are for Luke's public key (from keys.openpgp.org and
-the Knots guix.sigs repository; the fingerprint check is what counts). There
-is no telemetry. `INSTALL.md` walks through the same steps by hand.
+The only other requests are for the public key that signed the node release:
+Jason's from github.com/jasonsopko.gpg, or Luke's from the Knots guix.sigs
+repository, and from keys.openpgp.org for either. The fingerprint check is
+what counts. There is no telemetry. `INSTALL.md` walks through the same
+steps by hand.
 
 ## How it is set up
 
 Everything lives in `~/knots-datum-node` and runs as user services of the
 `miner` account, starting again after a reboot.
 
-- For a new node, a pruned Bitcoin Knots node.
+- For a new node, a pruned Plumb or Bitcoin Knots node.
 - The DATUM gateway, limited by systemd: it cannot gain privileges, run
   unexpected system calls, or use more than 1 GB of memory, and it accepts
   at most 256 miner connections. Its login to the node can make only the

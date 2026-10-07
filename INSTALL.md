@@ -12,16 +12,35 @@ and copy each file from its section:
 
     ./install.sh --dry-run | tee plan.txt
 
+To install Bitcoin Knots rather than Plumb, add `--software knots`, so the
+files the dry run shows name the right one.
+
 Where a file holds a password, the dry run shows a placeholder. Step 3
 covers making the real ones.
 
     mkdir -p ~/knots-datum-node/bin ~/knots-datum-node/bitcoin ~/knots-datum-node/gateway ~/knots-datum-node/conf ~/.config/systemd/user
     chmod 700 ~/knots-datum-node ~/knots-datum-node/conf
 
-## 1. Bitcoin Knots
+## 1. The node
 
 Download the release, its hash list, and the signature on the hash list.
-Use `aarch64-linux-gnu` in place of `x86_64-linux-gnu` on an arm64 computer.
+For Plumb (x86_64 only):
+
+    V=29.4.2.knots20260508.plumb6
+    cd /tmp
+    curl -LO https://github.com/plumb-node/plumb/releases/download/v$V/SHA256SUMS
+    curl -LO https://github.com/plumb-node/plumb/releases/download/v$V/SHA256SUMS.asc
+    curl -LO https://github.com/plumb-node/plumb/releases/download/v$V/bitcoin-$V-x86_64-linux-gnu.tar.gz
+
+Get Jason Sopko's key and check the signature. The output must say
+`Good signature` and show the fingerprint
+`89F0 E41D 72CE 523F 4AA1  CDB6 92CD FFB7 C40C D1BA`.
+
+    gpg --keyserver hkps://keys.openpgp.org --recv-keys 89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA
+    gpg --verify SHA256SUMS.asc SHA256SUMS
+
+For Bitcoin Knots instead (on an arm64 computer, use
+`aarch64-linux-gnu` in place of `x86_64-linux-gnu`):
 
     V=29.4.2.knots20260508
     cd /tmp

@@ -5,6 +5,12 @@ KNOTS_VER=29.4.2.knots20260508
 KNOTS_BASE=https://bitcoinknots.org/files/29.x/$KNOTS_VER
 KNOTS_FPR=1A3E761F19D2CC7785C5502EA291A2C45D0C504A   # Luke Dashjr (Codesigning)
 KNOTS_KEY_URL=https://raw.githubusercontent.com/bitcoinknots/guix.sigs/knots/builder-keys/luke-jr.gpg
+# Plumb: that Knots release plus the spam filters listed in its README, all
+# on. The default for a new node. Its release is built for x86_64 only.
+PLUMB_VER=29.4.2.knots20260508.plumb6
+PLUMB_BASE=https://github.com/plumb-node/plumb/releases/download/v$PLUMB_VER
+PLUMB_FPR=89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA   # Jason Sopko
+PLUMB_KEY_URL=https://github.com/jasonsopko.gpg
 
 # CONVOY gateway master (b9ea7dc) plus the duplicate-share use-after-free fix
 # from CONVOYMining/datum_gateway#18, which is reviewed but not merged yet.
@@ -92,7 +98,7 @@ require_python() {
 # Command line flags go in F_* and win over whatever is already saved.
 
 F_ADDRESS= F_MODE= F_POOL_HOST= F_POOL_PUBKEY= F_TAG1= F_TAG2= F_TAG1_SET=0 F_TAG2_SET=0
-F_NODE= F_RPC_USER= F_DASH_OPEN= F_SHARED=
+F_NODE= F_RPC_USER= F_DASH_OPEN= F_SHARED= F_SOFTWARE=
 
 # Handles one settings flag. Returns 1 if $1 is not one, so callers can go on
 # to their own flags. Sets SHIFT to how many arguments it used.
@@ -117,8 +123,20 @@ parse_setting_flag() {
 # Saved settings from an earlier install, if there are any.
 load_saved_settings() {
 	S_ADDRESS= S_MODE= S_POOL_HOST= S_POOL_PORT= S_POOL_PUBKEY= S_TAG1= S_TAG2= S_UNIQUE_ID= S_RPC_PASS= S_API_PASS=
-	S_RPC_URL= S_RPC_USER= S_NODE= S_DASH_OPEN= S_SHARED=
+	S_RPC_URL= S_RPC_USER= S_NODE= S_DASH_OPEN= S_SHARED= S_SOFTWARE=
 	HAVE_SAVED=0
+	# Which release the node this installed came from, by its version. An
+	# empty datadir, so bitcoind neither reads ~/.bitcoin/bitcoin.conf nor
+	# writes there.
+	if [ -x "$BIN/bitcoind" ]; then
+		local vdir
+		vdir=$(mktemp -d)
+		case "$("$BIN/bitcoind" -datadir="$vdir" -version 2>/dev/null | sed -n 1p || true)" in
+			*.plumb[0-9]*) S_SOFTWARE=plumb ;;
+			*knots*) S_SOFTWARE=knots ;;
+		esac
+		rm -rf "$vdir"
+	fi
 	[ -f "$CONF/datum_gateway.json" ] || return 0
 	eval "$(python3 - "$CONF/datum_gateway.json" "$CONVOY_HOST" <<'PY'
 import json, shlex, sys
@@ -262,6 +280,10 @@ check_node_addr() {	# host or host:port; sets NODE_HOST and NODE_PORT
 	NODE_HOST=$h NODE_PORT=$p
 }
 check_any() { return 0; }
+check_software() {
+	case "$1" in plumb|knots) return 0 ;; esac
+	echo "type plumb or knots"; return 1
+}
 # Something already answering on this computer's RPC port that this did not install.
 other_local_node() {
 	[ -f "$UNITS/$NODE_UNIT" ] && return 1
@@ -360,7 +382,7 @@ settle_node() {	# $1 = 1 if interactive
 		cat <<'TEXT'
 Which Bitcoin node should your gateway use?
 
-  new       Install Bitcoin Knots here. It downloads and checks the whole
+  new       Install a new node here. It downloads and checks the whole
             chain before your miners can connect: a day or more, and about
             800 GB of internet data.
 
@@ -371,6 +393,7 @@ Which Bitcoin node should your gateway use?
 TEXT
 		ask NODE "new or existing" "$NODE" check_node_choice
 	fi
+	[ "$NODE" = new ] || [ -z "$F_SOFTWARE" ] || die "--software is only for a new node (--node new)"
 
 	if [ "$NODE" = new ]; then
 		other_local_node && die "a Bitcoin node is already running on this computer, and a second one would clash with it. Choose existing to use it, or stop it first."
@@ -435,6 +458,44 @@ TEXT
 	done
 }
 
+# Which release a new node gets: Plumb unless the user picks Knots, or the
+# node this installed earlier runs Knots, or this is not an x86_64 computer.
+# Sets SOFTWARE and the NODE_* download details. Only install.sh asks
+# (CHOOSE_SOFTWARE=1); configure never downloads a node.
+settle_software() {	# $1 = 1 if interactive
+	SOFTWARE=${F_SOFTWARE:-${S_SOFTWARE:-plumb}}
+	if [ "$ARCH" != x86_64-linux-gnu ]; then
+		[ "$F_SOFTWARE" != plumb ] || die "Plumb is built for x86_64 computers only, and this one is $(uname -m). Use --software knots."
+		SOFTWARE=knots
+		[ "$1" = 0 ] || { echo; echo "Plumb is built for x86_64 computers only, so this installs Bitcoin Knots."; }
+	elif [ "$1" = 1 ]; then
+		echo
+		cat <<'TEXT'
+Which node software?
+
+  plumb  Bitcoin Knots with Plumb's spam filters, all turned on, so your
+         node leaves more spam out of the blocks it builds and does not
+         pass it on. It follows the same chain as Knots and keeps the same
+         data, so you can switch either way later by running the install
+         again. https://github.com/plumb-node/plumb
+
+  knots  Bitcoin Knots as released.
+
+Plumb's release is built and signed by Jason Sopko, who also signs this
+installer. Knots' release is signed by Luke Dashjr.
+
+TEXT
+		ask SOFTWARE "plumb or knots" "$SOFTWARE" check_software
+	fi
+	if [ "$SOFTWARE" = plumb ]; then
+		NODE_NAME=Plumb NODE_VER=$PLUMB_VER NODE_BASE=$PLUMB_BASE NODE_FPR=$PLUMB_FPR NODE_KEY_URL=$PLUMB_KEY_URL
+		NODE_SIGNER="Jason Sopko, Plumb release key"
+	else
+		NODE_NAME="Bitcoin Knots" NODE_VER=$KNOTS_VER NODE_BASE=$KNOTS_BASE NODE_FPR=$KNOTS_FPR NODE_KEY_URL=$KNOTS_KEY_URL
+		NODE_SIGNER="Luke Dashjr, Knots release key"
+	fi
+}
+
 # Works out the settings from flags, then saved values, then defaults. Asks
 # about each one when run in a terminal (unless NO_PROMPT=1); otherwise the
 # flags and saved values have to be enough.
@@ -452,12 +513,16 @@ settle_settings() {
 	TAG1=${S_TAG1:-$DEFAULT_TAG1}; [ $F_TAG1_SET = 0 ] || TAG1=$F_TAG1
 	TAG2=$S_TAG2; [ $F_TAG2_SET = 0 ] || TAG2=$F_TAG2
 	UNIQUE_ID=${S_UNIQUE_ID:-$(python3 -c 'import secrets; print(secrets.randbelow(65535) + 1)')}
+	SOFTWARE=$S_SOFTWARE
 
 	if [ $interactive = 1 ]; then
 		echo
 		echo "Answer each question, or press Enter to keep the value in [brackets]."
 	fi
 	settle_node $interactive
+	if [ "$NODE" = new ] && [ "${CHOOSE_SOFTWARE:-0}" = 1 ]; then
+		settle_software $interactive
+	fi
 	if [ $interactive = 1 ]; then
 		echo
 		cat <<'TEXT'
@@ -629,7 +694,9 @@ miner_login_help() {	# what to type into a miner, for the end of install and con
 	fi
 }
 show_settings() {
-	if [ "$NODE" = new ]; then echo "  node:           new, installed here"; else echo "  node:           existing, at $NODE_HOST:$NODE_PORT (login $RPC_USER)"; fi
+	local sw=
+	case "$SOFTWARE" in plumb) sw="Plumb, " ;; knots) sw="Bitcoin Knots, " ;; esac
+	if [ "$NODE" = new ]; then echo "  node:           new, ${sw}installed here"; else echo "  node:           existing, at $NODE_HOST:$NODE_PORT (login $RPC_USER)"; fi
 	echo "  payout address: $ADDRESS"
 	if [ "$MODE" = pool ]; then
 		if [ -n "$POOL_HOST" ]; then echo "  mining:         pool, $POOL_HOST:$POOL_PORT"; else echo "  mining:         pool, CONVOY"; fi
@@ -708,7 +775,7 @@ EOF
 render_node_unit() {
 	cat <<EOF
 [Unit]
-Description=Bitcoin Knots (knots-datum-node)
+Description=$NODE_NAME (knots-datum-node)
 
 [Service]
 ExecStart=$BIN/bitcoind -conf=$CONF/bitcoin.conf -datadir=$DATA
