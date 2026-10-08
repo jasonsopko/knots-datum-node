@@ -53,6 +53,25 @@ everything, and let its programs keep running after you log out. The last
 one switches to that account. On other distributions, skip the two install
 lines: the script prints the right ones for your system in step 4.
 
+The `miner` account has no password. To come back to it later, log in with
+your own account, the one you ran these commands from, and run
+`sudo -iu miner` again.
+
+To log in to `miner` directly over SSH instead, run what follows from the
+account you log in with (type `exit` first if you are still in the `miner`
+shell). If that account logs in with a password, `sudo passwd miner` gives
+`miner` a password of its own. If it logs in with a key, give `miner` the
+same key:
+
+    sudo install -d -m 700 -o miner -g miner /home/miner/.ssh
+    sudo install -m 600 -o miner -g miner ~/.ssh/authorized_keys /home/miner/.ssh/
+
+On Fedora, or any other system with SELinux turned on, also run
+`sudo restorecon -R /home/miner/.ssh`.
+
+If you typed `exit` for this, run `sudo -iu miner` to go back to the
+`miner` account for step 2.
+
 ## Step 2: download it and check the signature
 
 As the `miner` user:
