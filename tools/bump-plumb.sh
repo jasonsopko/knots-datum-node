@@ -4,12 +4,14 @@
 #
 #   tools/bump-plumb.sh <version>      for example 29.4.2.knots20260508.plumb7
 #
-# Downloads that release's SHA256SUMS, SHA256SUMS.asc and x86_64 tarball, and
-# stops unless the signature is by PLUMB_FPR, a key gpg does not list as
-# revoked, and the tarball matches its line, as install.sh checks them, and
-# unless the bitcoind and bitcoin-cli inside report that version. Then it
-# rewrites the version in lib.sh, README.md and INSTALL.md, all three or none,
-# and shows the diff. It commits nothing. Run ./install.sh --dry-run after.
+# Downloads that release's SHA256SUMS and SHA256SUMS.asc and stops unless the
+# signature is by PLUMB_FPR, a key gpg does not list as revoked, as install.sh
+# checks it. Then it downloads the x86_64 and the aarch64 tarball, since the
+# installer takes whichever matches the machine, and stops unless each matches
+# its line and holds bitcoind and bitcoin-cli, and unless the two binaries for
+# this machine's own architecture report that version. Then it rewrites the
+# version in lib.sh, README.md and INSTALL.md, all three or none, and shows
+# the diff. It commits nothing. Run ./install.sh --dry-run after.
 #
 # PLUMB_BASE_URL replaces the release download URL, for testing against local
 # copies (file:///...).
@@ -27,15 +29,15 @@ BASE_PATTERN=$(sed -n 's/^PLUMB_BASE=//p' lib.sh)
 [ "$NEW" != "$OLD" ] || die "the installer already uses $NEW"
 BASE=${BASE_PATTERN//'$PLUMB_VER'/$NEW}
 if [ -n "${PLUMB_BASE_URL:-}" ]; then BASE=$PLUMB_BASE_URL; echo "PLUMB_BASE_URL is set: downloading from $BASE, not GitHub"; fi
-TARBALL=bitcoin-$NEW-x86_64-linux-gnu.tar.gz
+case "$(uname -m)" in x86_64|aarch64) MINE=$(uname -m) ;; *) die "run this on an x86_64 or aarch64 machine" ;; esac
 
 # A keyring of its own, set before the trap, so the trap never touches yours.
 W=$(mktemp -d); export GNUPGHOME=$W/gnupg; mkdir -m 700 "$GNUPGHOME" "$W/stage"
 trap 'GNUPGHOME=$W/stage gpgconf --kill all 2>/dev/null || true; gpgconf --kill all 2>/dev/null || true; rm -rf "$W"' EXIT
 cd "$W"
 echo "== downloading Plumb $NEW"
-for f in SHA256SUMS SHA256SUMS.asc "$TARBALL"; do
-	curl -sSfLO "$BASE/$f" || die "could not download $BASE/$f (is the release published, with its tarball?)"
+for f in SHA256SUMS SHA256SUMS.asc; do
+	curl -sSfLO "$BASE/$f" || die "could not download $BASE/$f (is the release published?)"
 done
 # As install.sh does: a staging keyring, then only an export of it that drops
 # every subkey carrying the release key's fingerprint.
@@ -50,8 +52,14 @@ grep -qE "^\[GNUPG:\] (GOODSIG|EXPKEYSIG) (${FPR: -16}|$FPR) " <<<"$VERIFY" || d
 # exactly one pub whose own fingerprint is this one, not revoked.
 [ "$(gpg --with-colons --list-keys "$FPR" 2>/dev/null | awk -F: -v f="$FPR" '$1 == "pub" {v = $2; p = 1; next} p && $1 == "fpr" {if ($10 == f) {n++; if (v == "r") r = 1}; p = 0} END {print (n == 1 && !r) ? "ok" : "no"}')" = ok ] || die "SHA256SUMS is signed by $FPR, but gpg lists that key as revoked, or more than once"
 echo "SHA256SUMS signed by $FPR"
-grep " $TARBALL\$" SHA256SUMS | sha256sum -c - || die "$TARBALL does not match SHA256SUMS"
-tar xzf "$TARBALL"
+for a in x86_64 aarch64; do
+	t=bitcoin-$NEW-$a-linux-gnu.tar.gz
+	curl -sSfLO "$BASE/$t" || die "could not download $BASE/$t (the installer needs both the x86_64 and the aarch64 tarball)"
+	grep " $t\$" SHA256SUMS | sha256sum -c - || die "$t does not match SHA256SUMS"
+	tar tzf "$t" > "$t.list"
+	grep -qx "bitcoin-$NEW/bin/bitcoind" "$t.list" && grep -qx "bitcoin-$NEW/bin/bitcoin-cli" "$t.list" || die "$t has no bitcoin-$NEW/bin/bitcoind and bitcoin-cli"
+done
+tar xzf "bitcoin-$NEW-$MINE-linux-gnu.tar.gz"
 mkdir d
 [ -x "./bitcoin-$NEW/bin/bitcoind" ] && [ -x "./bitcoin-$NEW/bin/bitcoin-cli" ] || die "the tarball has no bitcoin-$NEW/bin/bitcoind and bitcoin-cli"
 V=$("./bitcoin-$NEW/bin/bitcoind" -datadir="$W/d" -version | sed -n 1p)
@@ -59,7 +67,7 @@ V=$("./bitcoin-$NEW/bin/bitcoind" -datadir="$W/d" -version | sed -n 1p)
 echo "$V"
 V=$("./bitcoin-$NEW/bin/bitcoin-cli" -datadir="$W/d" -version | sed -n 1p)
 [ "$V" = "Bitcoin Knots RPC client version v$NEW" ] || die "the tarball's bitcoin-cli says \"$V\", not v$NEW"
-echo "$V"
+echo "$V ($MINE; the other tarball was checked by hash and file list, not run)"
 cd - >/dev/null
 
 echo "== $OLD -> $NEW in lib.sh, README.md, INSTALL.md"
@@ -77,8 +85,8 @@ for path, line in lines:
 for path, line in lines:
 	open(path, "w").write(texts[path].replace(line % old, line % new))
 PY
-git diff --stat
-git diff
+git diff --stat -- lib.sh README.md INSTALL.md
+git diff -- lib.sh README.md INSTALL.md
 base=${NEW%.plumb*}
 [ "$base" = "$KNOTS_VER" ] || echo "note: Plumb $NEW is built on Knots $base, but KNOTS_VER (the knots choice) is still $KNOTS_VER"
 echo "next: ./install.sh --dry-run --address <addr> --mode pool --node new, then commit"
