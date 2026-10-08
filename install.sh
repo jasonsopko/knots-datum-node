@@ -17,7 +17,7 @@
 # [--shared yes|no] [--node new | --node <host[:port]> --rpc-user <user>,
 # with the password in the NODE_RPC_PASSWORD environment variable, to use a
 # node you already run] [--software plumb|knots, for a new node: Plumb unless
-# this node already runs Knots; ARM computers get Knots]
+# this node already runs Knots]
 #
 # The mining port is open to anyone by default, like a pool's.
 # --miner-ip <IP or range> (repeatable) prints firewall commands that limit it

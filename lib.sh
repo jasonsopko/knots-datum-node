@@ -6,7 +6,7 @@ KNOTS_BASE=https://bitcoinknots.org/files/29.x/$KNOTS_VER
 KNOTS_FPR=1A3E761F19D2CC7785C5502EA291A2C45D0C504A   # Luke Dashjr (Codesigning)
 KNOTS_KEY_URL=https://raw.githubusercontent.com/bitcoinknots/guix.sigs/knots/builder-keys/luke-jr.gpg
 # Plumb: that Knots release plus the spam filters listed in its README, all
-# on. The default for a new node. Its release is built for x86_64 only.
+# on. The default for a new node, on x86_64 and on aarch64.
 PLUMB_VER=29.4.2.knots20260508.plumb6
 PLUMB_BASE=https://github.com/plumb-node/plumb/releases/download/v$PLUMB_VER
 PLUMB_FPR=89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA   # Jason Sopko
@@ -459,16 +459,12 @@ TEXT
 }
 
 # Which release a new node gets: Plumb unless the user picks Knots, or the
-# node this installed earlier runs Knots, or this is not an x86_64 computer.
-# Sets SOFTWARE and the NODE_* download details. Only install.sh asks
-# (CHOOSE_SOFTWARE=1); configure never downloads a node.
+# node this installed earlier runs Knots. Sets SOFTWARE and the NODE_*
+# download details. Only install.sh asks (CHOOSE_SOFTWARE=1); configure
+# never downloads a node.
 settle_software() {	# $1 = 1 if interactive
 	SOFTWARE=${F_SOFTWARE:-${S_SOFTWARE:-plumb}}
-	if [ "$ARCH" != x86_64-linux-gnu ]; then
-		[ "$F_SOFTWARE" != plumb ] || die "Plumb is built for x86_64 computers only, and this one is $(uname -m). Use --software knots."
-		SOFTWARE=knots
-		[ "$1" = 0 ] || { echo; echo "Plumb is built for x86_64 computers only, so this installs Bitcoin Knots."; }
-	elif [ "$1" = 1 ]; then
+	if [ "$1" = 1 ]; then
 		echo
 		cat <<'TEXT'
 Which node software?
@@ -483,8 +479,9 @@ Which node software?
 
 Plumb's release is built and signed by Jason Sopko, who also signs this
 installer. Knots' release is signed by Luke Dashjr.
-
 TEXT
+		[ "$ARCH" != aarch64-linux-gnu ] || echo "Plumb's ARM build has been tested under emulation, not yet on ARM hardware."
+		echo
 		ask SOFTWARE "plumb or knots" "$SOFTWARE" check_software
 	fi
 	if [ "$SOFTWARE" = plumb ]; then

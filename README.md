@@ -4,8 +4,7 @@ Run your own DATUM gateway, so the blocks your miners work on are built by
 your own Bitcoin node, not by a pool. It installs a node for you, or uses a
 Knots node you already run, and sets up the gateway, a web dashboard and a
 status command. A new node is [Plumb](https://github.com/plumb-node/plumb),
-Bitcoin Knots with extra spam filters, unless you choose Knots as released
-or the computer is ARM, which gets Knots.
+Bitcoin Knots with extra spam filters, unless you choose Knots as released.
 
 It runs as an ordinary user. The only steps that need an administrator are
 listed up front, and the script tells you if any are missing.
@@ -203,9 +202,9 @@ brackets.
   running the install again. `knots` installs Bitcoin Knots as released.
   Plumb's release is built and signed by Jason Sopko, who also signs this
   installer; it is one person's build, not a reproducible one. Knots'
-  release is signed by Luke Dashjr. Plumb is built for x86_64 only, so ARM
-  computers get Knots without being asked. When you update, it suggests
-  the one you run now.
+  release is signed by Luke Dashjr. Plumb's ARM build has been tested under
+  emulation, not yet on ARM hardware. When you update, it suggests the one
+  you run now.
 - **Payout address.** The Bitcoin address your rewards go to, in pool
   mode and solo alike. This is the one setting that decides who gets paid,
   so take it from a wallet you control and copy and paste it. A reward paid
@@ -356,7 +355,7 @@ The script downloads at most two things and stops unless both check out:
 | What | From | Checked by |
 | --- | --- | --- |
 | Plumb 29.4.2.knots20260508.plumb6 (new node, unless you choose Knots) | github.com/plumb-node/plumb releases | The list of file hashes must be signed by Jason Sopko's key `89F0 E41D 72CE 523F 4AA1 CDB6 92CD FFB7 C40C D1BA`, and the download must match it |
-| Bitcoin Knots 29.4.2 (new node, if you choose it, and on ARM) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
+| Bitcoin Knots 29.4.2 (new node, if you choose it) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
 | DATUM gateway source | github.com/CONVOYMining/datum_gateway | Fetched by exact commit, `6ccfbe55a7e7cd6c066aa428e771a37a22e92277`: CONVOY's code plus the fix in CONVOYMining/datum_gateway#18 |
 
 The only other requests are for the public key that signed the node release:

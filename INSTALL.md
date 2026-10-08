@@ -24,7 +24,8 @@ covers making the real ones.
 ## 1. The node
 
 Download the release, its hash list, and the signature on the hash list.
-For Plumb (x86_64 only):
+For Plumb (on an arm64 computer, use `aarch64-linux-gnu` in place of
+`x86_64-linux-gnu`):
 
     V=29.4.2.knots20260508.plumb6
     cd /tmp
