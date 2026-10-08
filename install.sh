@@ -111,6 +111,10 @@ echo
 show_settings
 
 if [ "$NODE" = new ]; then
+	# uname -m names the kernel's architecture, and a 64-bit kernel can run a
+	# 32-bit system (the 32-bit Raspberry Pi OS boots one on a Pi 4 or 5). The
+	# node release this installs is the 64-bit one.
+	[ "$(getconf LONG_BIT 2>/dev/null)" = 64 ] || { [ $DRY_RUN = 1 ] && echo "warning: this computer runs a 32-bit operating system, and a new node needs a 64-bit one"; } || die "this computer runs a 32-bit operating system on a 64-bit processor, and the node release this installs needs a 64-bit one. Install the 64-bit version of the operating system (on a Raspberry Pi: Raspberry Pi OS 64-bit), or use a node you already run."
 	[ "$MEM_MB" -ge 1800 ] || { [ $DRY_RUN = 1 ] && echo "warning: a new node needs at least 2 GB of RAM (this has ${MEM_MB} MB)"; } || die "a new node needs at least 2 GB of RAM (this computer has ${MEM_MB} MB). Use an existing node, or a bigger computer."
 	[ "$DISK_GB" -ge 40 ] || { [ $DRY_RUN = 1 ] && echo "warning: a new node needs at least 40 GB free disk (this has ${DISK_GB} GB)"; } || die "a new node needs at least 40 GB free in your home directory (it has ${DISK_GB} GB)."
 	echo

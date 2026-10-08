@@ -25,9 +25,10 @@ listed up front, and the script tells you if any are missing.
 ## What you need
 
 - A computer running Linux with systemd: Debian, Ubuntu, Fedora, Arch,
-  openSUSE and their relatives all work. For a new node, 4 GB of memory and
-  60 GB of free disk is comfortable; 2 GB and 40 GB is the minimum. With a
-  node you already run, any small computer will do.
+  openSUSE and their relatives all work. A new node needs a 64-bit system
+  on an x86_64 or ARM processor (on a Raspberry Pi, Raspberry Pi OS 64-bit),
+  and 4 GB of memory and 60 GB of free disk is comfortable; 2 GB and 40 GB
+  is the minimum. With a node you already run, any small computer will do.
 - For a new node, time and internet data. Before your miners can connect,
   the node downloads and checks the whole Bitcoin chain: a day or more, and
   about 800 GB of downloads. If your internet plan has a data cap, check it
