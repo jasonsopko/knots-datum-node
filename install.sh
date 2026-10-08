@@ -185,12 +185,28 @@ say "downloading $NODE_NAME $NODE_VER"
 curl -sSfLO "$NODE_BASE/SHA256SUMS"
 curl -sSfLO "$NODE_BASE/SHA256SUMS.asc"
 curl -sSfLO "$NODE_BASE/$TARBALL"
-export GNUPGHOME=$WORK/gnupg; mkdir -m 700 "$GNUPGHOME"
-curl -sSfL "$NODE_KEY_URL" | gpg -q --import 2>/dev/null || true
-gpg -q --keyserver hkps://keys.openpgp.org --recv-keys "$NODE_FPR" 2>/dev/null || true
-# Only a signature by this exact key counts, wherever the key came from.
+# The keys go into a staging keyring first, and only an export of it that
+# drops every subkey carrying the release key's fingerprint reaches the
+# keyring the signature is checked with. Someone holding a stolen release key
+# can attach it as a subkey to a certificate of their own; served ahead of
+# the real key, that makes gpg check through their certificate, or keep an
+# unrevoked copy of the real key beside the revoked one.
+export GNUPGHOME=$WORK/gnupg; mkdir -m 700 "$GNUPGHOME" "$WORK/stage"
+curl -sSfL "$NODE_KEY_URL" | GNUPGHOME=$WORK/stage gpg -q --import 2>/dev/null || true
+GNUPGHOME=$WORK/stage gpg -q --keyserver hkps://keys.openpgp.org --recv-keys "$NODE_FPR" 2>/dev/null || true
+GNUPGHOME=$WORK/stage gpg --export --export-filter "drop-subkey=fpr = $NODE_FPR" 2>/dev/null | gpg -q --import 2>/dev/null || true
+GNUPGHOME=$WORK/stage gpgconf --kill all 2>/dev/null || true
+# Only a signature by this exact key counts, as its own primary key (VALIDSIG's
+# first and last fingerprints), and not once that key is revoked. gpg still
+# prints VALIDSIG for a revoked key; the signature line says REVKEYSIG, or
+# EXPKEYSIG once the key has also expired, so ask gpg about the key itself
+# too: exactly one pub whose own fingerprint is this one, not revoked. An
+# expired key still counts.
 VERIFY=$(gpg --status-fd 1 --verify SHA256SUMS.asc SHA256SUMS 2>/dev/null || true)
-grep -q "^\[GNUPG:\] VALIDSIG $NODE_FPR " <<<"$VERIFY" || die "SHA256SUMS is not signed by $NODE_FPR"
+grep -q "^\[GNUPG:\] VALIDSIG $NODE_FPR .* $NODE_FPR\$" <<<"$VERIFY" || die "SHA256SUMS is not signed by $NODE_FPR"
+grep -qE "^\[GNUPG:\] (GOODSIG|EXPKEYSIG) (${NODE_FPR: -16}|$NODE_FPR) " <<<"$VERIFY" || die "SHA256SUMS is signed by $NODE_FPR, but gpg does not call the signature good"
+[ "$(gpg --with-colons --list-keys "$NODE_FPR" 2>/dev/null | awk -F: -v f="$NODE_FPR" '$1 == "pub" {v = $2; p = 1; next} p && $1 == "fpr" {if ($10 == f) {n++; if (v == "r") r = 1}; p = 0} END {print (n == 1 && !r) ? "ok" : "no"}')" = ok ] || die "SHA256SUMS is signed by $NODE_FPR, but gpg lists that key as revoked, or more than once"
+gpgconf --kill all 2>/dev/null || true
 echo "SHA256SUMS signed by $NODE_FPR ($NODE_SIGNER)"
 grep " $TARBALL\$" SHA256SUMS | sha256sum -c - || die "download does not match SHA256SUMS"
 tar xzf "$TARBALL"
