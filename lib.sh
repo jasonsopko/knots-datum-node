@@ -12,11 +12,10 @@ PLUMB_BASE=https://github.com/plumb-node/plumb/releases/download/v$PLUMB_VER
 PLUMB_FPR=89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA   # Jason Sopko
 PLUMB_KEY_URL=https://github.com/jasonsopko.gpg
 
-# CONVOY gateway master (b9ea7dc) plus the duplicate-share use-after-free fix
-# from CONVOYMining/datum_gateway#18, which is reviewed but not merged yet.
+# CONVOY's gateway release v0.5.0beta, the commit its signed tag names.
 # Fetched by commit hash, so nothing pushed later can change what gets built.
 GW_REPO=https://github.com/CONVOYMining/datum_gateway.git
-GW_COMMIT=6ccfbe55a7e7cd6c066aa428e771a37a22e92277
+GW_COMMIT=69c61a95cb941c35138c30b8d738e789ad8cdac1
 
 COMMANDS=(git curl gpg python3 ip make cc cmake pkg-config)
 LIBS=(libcurl jansson libsodium libmicrohttpd)

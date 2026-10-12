@@ -147,7 +147,7 @@ EOF
 
 == 2. build the DATUM gateway
 git fetch $GW_REPO $GW_COMMIT
-(CONVOY master plus the fix from CONVOYMining/datum_gateway#18)
+(CONVOY's release v0.5.0beta)
 Builds it and puts datum_gateway in $BIN.
 
 == 3. $CONF/bitcoin.conf (readable by you only)

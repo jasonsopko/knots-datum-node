@@ -68,14 +68,14 @@ place:
 Fetch the exact commit and build it:
 
     git init gw && cd gw
-    git fetch --depth 1 https://github.com/CONVOYMining/datum_gateway.git 6ccfbe55a7e7cd6c066aa428e771a37a22e92277
+    git fetch --depth 1 https://github.com/CONVOYMining/datum_gateway.git 69c61a95cb941c35138c30b8d738e789ad8cdac1
     git checkout FETCH_HEAD
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build -j$(nproc)
     install -m 755 build/datum_gateway ~/knots-datum-node/bin/
 
-That commit is CONVOY's code plus the fix in CONVOYMining/datum_gateway#18,
-which you can read on GitHub before building.
+That commit is CONVOY's release v0.5.0beta, which you can read on GitHub
+before building.
 
 ## 3. Node configuration
 
