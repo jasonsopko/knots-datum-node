@@ -27,7 +27,7 @@ Download the release, its hash list, and the signature on the hash list.
 For Plumb (on an arm64 computer, use `aarch64-linux-gnu` in place of
 `x86_64-linux-gnu`):
 
-    V=29.4.2.knots20260508.plumb6
+    V=29.4.2.knots20260508.plumb7
     cd /tmp
     curl -LO https://github.com/plumb-node/plumb/releases/download/v$V/SHA256SUMS
     curl -LO https://github.com/plumb-node/plumb/releases/download/v$V/SHA256SUMS.asc
