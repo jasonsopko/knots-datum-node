@@ -43,7 +43,7 @@ Get Jason Sopko's key and check the signature. The output must say
 For Bitcoin Knots instead (on an arm64 computer, use
 `aarch64-linux-gnu` in place of `x86_64-linux-gnu`):
 
-    V=29.4.2.knots20260508
+    V=29.4.3.knots20260508
     cd /tmp
     curl -O https://bitcoinknots.org/files/29.x/$V/SHA256SUMS
     curl -O https://bitcoinknots.org/files/29.x/$V/SHA256SUMS.asc

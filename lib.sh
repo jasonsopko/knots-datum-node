@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Shared by install.sh and configure.sh. Not meant to be run on its own.
 
-KNOTS_VER=29.4.2.knots20260508
+KNOTS_VER=29.4.3.knots20260508
 KNOTS_BASE=https://bitcoinknots.org/files/29.x/$KNOTS_VER
 KNOTS_FPR=1A3E761F19D2CC7785C5502EA291A2C45D0C504A   # Luke Dashjr (Codesigning)
 KNOTS_KEY_URL=https://raw.githubusercontent.com/bitcoinknots/guix.sigs/knots/builder-keys/luke-jr.gpg
