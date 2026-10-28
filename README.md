@@ -373,7 +373,7 @@ The script downloads at most two things and stops unless both check out:
 
 | What | From | Checked by |
 | --- | --- | --- |
-| Plumb 29.4.2.knots20260508.plumb7 (new node, unless you choose Knots) | github.com/plumb-node/plumb releases | The list of file hashes must be signed by Jason Sopko's key `89F0 E41D 72CE 523F 4AA1 CDB6 92CD FFB7 C40C D1BA`, and the download must match it |
+| Plumb 29.4.3.knots20260508.plumb8 (new node, unless you choose Knots) | github.com/plumb-node/plumb releases | The list of file hashes must be signed by Jason Sopko's key `89F0 E41D 72CE 523F 4AA1 CDB6 92CD FFB7 C40C D1BA`, and the download must match it |
 | Bitcoin Knots 29.4.2 (new node, if you choose it) | bitcoinknots.org | The list of file hashes must be signed by Luke Dashjr's release key `1A3E 761F 19D2 CC77 85C5 502E A291 A2C4 5D0C 504A`, and the download must match it |
 | DATUM gateway source | github.com/CONVOYMining/datum_gateway | Fetched by exact commit, `69c61a95cb941c35138c30b8d738e789ad8cdac1`: CONVOY's release v0.5.0beta |
 

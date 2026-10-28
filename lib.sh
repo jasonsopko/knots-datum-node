@@ -7,7 +7,7 @@ KNOTS_FPR=1A3E761F19D2CC7785C5502EA291A2C45D0C504A   # Luke Dashjr (Codesigning)
 KNOTS_KEY_URL=https://raw.githubusercontent.com/bitcoinknots/guix.sigs/knots/builder-keys/luke-jr.gpg
 # Plumb: that Knots release plus the spam filters listed in its README, all
 # on. The default for a new node, on x86_64 and on aarch64.
-PLUMB_VER=29.4.2.knots20260508.plumb7
+PLUMB_VER=29.4.3.knots20260508.plumb8
 PLUMB_BASE=https://github.com/plumb-node/plumb/releases/download/v$PLUMB_VER
 PLUMB_FPR=89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA   # Jason Sopko
 PLUMB_KEY_URL=https://github.com/jasonsopko.gpg
