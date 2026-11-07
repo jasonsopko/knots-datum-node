@@ -9,7 +9,8 @@
 # checks it. Then it downloads the x86_64 and the aarch64 tarball, since the
 # installer takes whichever matches the machine, and stops unless each matches
 # its line and holds bitcoind and bitcoin-cli, and unless the two binaries for
-# this machine's own architecture report that version. Then it rewrites the
+# this machine's own architecture report that version (a build may show a
+# two-part Knots version such as 29.5 as 29.5.0). Then it rewrites the
 # version in lib.sh, README.md and INSTALL.md, all three or none, and shows
 # the diff. It commits nothing. Run ./install.sh --dry-run after.
 #
@@ -62,11 +63,17 @@ done
 tar xzf "bitcoin-$NEW-$MINE-linux-gnu.tar.gz"
 mkdir d
 [ -x "./bitcoin-$NEW/bin/bitcoind" ] && [ -x "./bitcoin-$NEW/bin/bitcoin-cli" ] || die "the tarball has no bitcoin-$NEW/bin/bitcoind and bitcoin-cli"
+# A build can show a two-part Knots version as x.y.0: plumb10's binaries say
+# v29.5.0.knots20260508.plumb10, its tag and tarballs 29.5.knots20260508.plumb10.
+# Either spelling counts.
+NEW0=$NEW
+[[ "$NEW" =~ ^([0-9]+\.[0-9]+)(\.knots.*)$ ]] && NEW0=${BASH_REMATCH[1]}.0${BASH_REMATCH[2]}
+WANT="v$NEW"; [ "$NEW0" = "$NEW" ] || WANT="v$NEW or v$NEW0"
 V=$("./bitcoin-$NEW/bin/bitcoind" -datadir="$W/d" -version | sed -n 1p)
-[ "$V" = "Bitcoin Knots daemon version v$NEW" ] || die "the tarball's bitcoind says \"$V\", not v$NEW"
+[ "$V" = "Bitcoin Knots daemon version v$NEW" ] || [ "$V" = "Bitcoin Knots daemon version v$NEW0" ] || die "the tarball's bitcoind says \"$V\", not $WANT"
 echo "$V"
 V=$("./bitcoin-$NEW/bin/bitcoin-cli" -datadir="$W/d" -version | sed -n 1p)
-[ "$V" = "Bitcoin Knots RPC client version v$NEW" ] || die "the tarball's bitcoin-cli says \"$V\", not v$NEW"
+[ "$V" = "Bitcoin Knots RPC client version v$NEW" ] || [ "$V" = "Bitcoin Knots RPC client version v$NEW0" ] || die "the tarball's bitcoin-cli says \"$V\", not $WANT"
 echo "$V ($MINE; the other tarball was checked by hash and file list, not run)"
 cd - >/dev/null
 
