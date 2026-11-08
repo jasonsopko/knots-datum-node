@@ -203,8 +203,10 @@ The install asks eight things. Press Enter to take the suggestion in
 brackets.
 
 - **Which node.** `new` installs a node here. `existing` uses a
-  Knots node you already run (version 29.4.1 or later), here or on your
-  network. For an existing node it makes a login only for the gateway and
+  Knots node you already run (version 29.4.3 or later, or Plumb plumb8 or
+  later), here or on your network. It refuses an older one, which does not
+  follow the current coinbase maturity rule.
+  For an existing node it makes a login only for the gateway and
   prints the lines to add to that node's `bitcoin.conf`, limited to the
   calls the gateway needs; you restart the node, and it checks the
   connection. If you cannot edit that node's `bitcoin.conf` (some node

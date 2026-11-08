@@ -292,10 +292,10 @@ other_local_node() {
 # Asks the node the questions the gateway will ask. Prints one line saying
 # what it found. Returns 0 if it is ready, 3 if it works but is still syncing,
 # 1 if it cannot be used.
-node_check() {	# $1 url, $2 user, $3 password
-	python3 - "$1" "$2" "$3" <<'PY'
-import base64, json, socket, sys, urllib.error, urllib.request
-url, user, pw = sys.argv[1:4]
+node_check() {	# $1 url, $2 user, $3 password, $4 how to run the installer again
+	python3 - "$1" "$2" "$3" "$4" <<'PY'
+import base64, json, re, socket, sys, urllib.error, urllib.request
+url, user, pw, again = sys.argv[1:5]
 auth = "Basic " + base64.b64encode(("%s:%s" % (user, pw)).encode()).decode()
 def call(method, params=None):
 	body = json.dumps({"jsonrpc": "1.0", "id": "check", "method": method, "params": params or []}).encode()
@@ -320,7 +320,41 @@ def call(method, params=None):
 		sys.exit(1)
 info = call("getblockchaininfo").get("result") or {}
 net = call("getnetworkinfo").get("result") or {}
-version = net.get("subversion", "unknown version").strip("/")
+sub = net.get("subversion")
+has_ua = isinstance(sub, str) and sub.strip("/") != ""
+version = sub.strip("/") if has_ua else "unknown version"
+# Bitcoin Knots 29.4.3 is the first release that follows the coinbase
+# maturity rule in force from block 979919; 29.4.1 and 29.4.2 accept a block
+# that breaks it. getnetworkinfo's "version" is the release as
+# 10000 * major + 100 * minor + patch (290403), fixed when the node was
+# built: no setting changes it, and a release candidate has its release's
+# number. Only the user agent says Knots: /Satoshi:29.5.0/Knots:20260508/,
+# where a release candidate has 20260508rc1 and Plumb adds /Plumb:10/.
+# -uacomment adds "(text)" inside the Satoshi part. -uaspoof=1 drops the
+# Knots part and any other -uaspoof value replaces the whole string, so a
+# node with it is refused; when its number would pass, the message says to
+# remove the setting.
+num = net.get("version")
+knots = [p[6:] for p in version.split("/") if p.startswith("Knots:")]
+new = "run %s and choose new to install Plumb or Knots on this computer" % again
+why = "It needs a release of Bitcoin Knots 29.4.3 or later (Plumb plumb8 or later), the releases that follow the current coinbase maturity rule. A node without that rule can follow a block that breaks it, and your miners would then work on a branch that 29.4.3 and later reject."
+fix = "Upgrade or replace that node, or %s." % new
+if type(num) is not int or num <= 0 or not has_ua or (knots and not re.fullmatch(r"[0-9]{8}(rc[0-9]+)?", knots[0])):
+	found = "%s, but could not tell which release it is" % version
+elif not knots:
+	found = "%s, which does not say it is Bitcoin Knots" % version
+	if num >= 290403:
+		why = "If it is Bitcoin Knots started with uaspoof, remove that setting and restart it, so that it reports itself as Knots."
+		fix = "Otherwise replace it with a release of Bitcoin Knots 29.4.3 or later (Plumb plumb8 or later), or %s." % new
+elif len(knots[0]) > 8:
+	found = "%s, a release candidate" % version
+elif num < 290403:
+	found = "%s (Bitcoin Knots %d.%d.%d)" % (version, num // 10000, num // 100 % 100, num % 100)
+else:
+	found = None
+if found:
+	print("found %s. %s %s" % (found, why, fix))
+	sys.exit(1)
 gbt = call("getblocktemplate", [{"rules": ["segwit", "blake2b"]}])
 syncing = info.get("initialblockdownload", False)
 if gbt.get("error"):
@@ -335,10 +369,22 @@ if not any("blake2b" in r for r in rules):
 	if chain != "main":
 		print("found %s on the %s network, where it does not build BLAKE2b blocks yet. Use a mainnet node." % (version, chain))
 	else:
-		print("found %s, but it does not build BLAKE2b blocks. It needs Bitcoin Knots 29.4.1 or later." % version)
+		print("found %s, but it does not build BLAKE2b blocks." % version)
 	sys.exit(1)
 print("found %s at block %s, building BLAKE2b blocks" % (version, info.get("blocks")))
 PY
+}
+
+# How a message tells the user to run the installer again: install.sh's full
+# path when it sits next to the lib.sh in use (as when install.sh runs),
+# otherwise where the README puts it (configure runs the copy of lib.sh in
+# ~/knots-datum-node, which has no install.sh).
+installer_again() {
+	if [ -n "${SRC_DIR:-}" ] && [ -f "$SRC_DIR/install.sh" ]; then
+		echo "$SRC_DIR/install.sh again"
+	else
+		echo "install.sh again from your copy of the installer (~/installer if you followed the README)"
+	fi
 }
 
 # The lines an existing node needs for the gateway's new login.
@@ -386,8 +432,9 @@ Which Bitcoin node should your gateway use?
             800 GB of internet data.
 
   existing  Use a Bitcoin Knots node you already run, on this computer or
-            on your network. It needs to be version 29.4.1 or later, the
-            versions that build BLAKE2b blocks.
+            on your network. It needs to be version 29.4.3 or later
+            (Plumb plumb8 or later), the versions that follow the current
+            coinbase maturity rule.
 
 TEXT
 		ask NODE "new or existing" "$NODE" check_node_choice
@@ -447,7 +494,7 @@ TEXT
 		RPC_URL=http://$NODE_HOST:$NODE_PORT
 		echo
 		echo "Checking the node at $NODE_HOST:$NODE_PORT..."
-		msg=$(node_check "$RPC_URL" "$RPC_USER" "$RPC_PASS") && rc=0 || rc=$?
+		msg=$(node_check "$RPC_URL" "$RPC_USER" "$RPC_PASS" "$(installer_again)") && rc=0 || rc=$?
 		echo "  $msg"
 		[ $rc = 0 ] || [ $rc = 3 ] && return 0
 		[ $interactive = 1 ] || die "the node is not usable yet, see above"
