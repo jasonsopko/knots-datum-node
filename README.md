@@ -185,7 +185,9 @@ differ, fix it with `~/knots-datum-node/configure` before anything else.
 4. After the next CONVOY block, look up your address on a block explorer
    that follows this chain, such as [mempool.guide](https://mempool.guide).
    The payment is an output of that block's first transaction. It can be
-   spent 100 blocks later.
+   spent 25920 blocks (about 180 days) later. For a block mined once the
+   median time of the last 11 blocks has reached 2027-09-01 00:00 UTC, the
+   wait is 100 blocks.
 
 If your miners show hashrate on `/clients` but the stats page stays empty
 after half an hour, the address is the first thing to check. CONVOY takes
@@ -195,7 +197,9 @@ The work is not credited to anyone.
 **Solo mode.** Your gateway's Coinbaser page should list a single
 payment: the whole reward, to your address. If your miners find a block,
 look it up on the block explorer: the block's first transaction pays your
-address, and it can be spent 100 blocks later.
+address, and it can be spent 25920 blocks (about 180 days) later (100 blocks
+for a block mined once the median time of the last 11 blocks has reached
+2027-09-01 00:00 UTC).
 
 ## Your settings
 
