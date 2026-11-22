@@ -374,11 +374,23 @@ else:
 if found:
 	print("found %s. %s %s" % (found, why, fix))
 	sys.exit(1)
+# CVE-2026-117348: a peer can stall the node with an orphan that has many
+# missing parents and inv messages that repeat it. Every release accepted
+# above that is older than Knots 29.5.1 (290501) lacks the fix, except Plumb
+# from plumb13 on, which carries it on Knots 29.5. Such a node gets a
+# warning, printed after the line that says what was found, and is used as
+# before.
+plumb = [p[6:] for p in version.split("/") if p.startswith("Plumb:")]
+warn = None
+if num < 290501 and not (plumb and plumb[0].isdigit() and int(plumb[0]) >= 13):
+	warn = "warning: this node lacks the fix for CVE-2026-117348, a flaw that lets another node make it stop handling new blocks and transactions for a while. Plumb plumb13 and plumb14, and Bitcoin Knots 29.5.1, have the fix. The gateway will still use this node; update it when you can."
 gbt = call("getblocktemplate", [{"rules": ["segwit", "blake2b"]}])
 syncing = info.get("initialblockdownload", False)
 if gbt.get("error"):
 	if syncing:
 		print("found %s, still syncing (block %s of %s); the gateway will start once it catches up" % (version, info.get("blocks"), info.get("headers")))
+		if warn:
+			print(warn)
 		sys.exit(3)
 	print("found %s, but it would not give a block template: %s" % (version, gbt["error"].get("message")))
 	sys.exit(1)
@@ -391,6 +403,8 @@ if not any("blake2b" in r for r in rules):
 		print("found %s, but it does not build BLAKE2b blocks." % version)
 	sys.exit(1)
 print("found %s at block %s, building BLAKE2b blocks" % (version, info.get("blocks")))
+if warn:
+	print(warn)
 PY
 }
 
@@ -514,7 +528,7 @@ TEXT
 		echo
 		echo "Checking the node at $NODE_HOST:$NODE_PORT..."
 		msg=$(node_check "$RPC_URL" "$RPC_USER" "$RPC_PASS" "$(installer_again)") && rc=0 || rc=$?
-		echo "  $msg"
+		sed 's/^/  /' <<<"$msg"
 		[ $rc = 0 ] || [ $rc = 3 ] && return 0
 		[ $interactive = 1 ] || die "the node is not usable yet, see above"
 		local again
