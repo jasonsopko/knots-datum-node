@@ -11,6 +11,16 @@ PLUMB_VER=29.5.knots20260508.plumb13
 PLUMB_BASE=https://github.com/plumb-node/plumb/releases/download/v$PLUMB_VER
 PLUMB_FPR=89F0E41D72CE523F4AA1CDB692CDFFB7C40CD1BA   # Jason Sopko
 PLUMB_KEY_URL=https://github.com/jasonsopko.gpg
+# Node releases this installer does not install, each with a known security
+# flaw: "<version>|<CVE id>|<what the flaw lets someone do, in plain words>".
+# Choosing Knots while KNOTS_VER is on this list says why and offers Plumb
+# (knots_offer), and install.sh stops before downloading any release on it.
+# With KNOTS_VER and PLUMB_VER off the list neither happens; the list is here
+# so that a later pin to a listed release is refused. Knots 29.5 lacks the
+# fix for CVE-2026-117348, which Knots 29.5.1 and Plumb plumb13 have.
+UNFIXED_NODE_VERS=(
+	"29.5.knots20260508|CVE-2026-117348|a node connected to it can make it stop handling new blocks and transactions for a while"
+)
 
 # CONVOY's gateway release v0.5.0beta, the commit its signed tag names.
 # Fetched by commit hash, so nothing pushed later can change what gets built.
@@ -283,6 +293,15 @@ check_software() {
 	case "$1" in plumb|knots) return 0 ;; esac
 	echo "type plumb or knots"; return 1
 }
+# For a release on UNFIXED_NODE_VERS, prints "<CVE id>|<plain words>"; fails
+# for any other.
+unfixed() {	# $1 = release version, as in KNOTS_VER
+	local e
+	for e in "${UNFIXED_NODE_VERS[@]}"; do
+		[ "${e%%|*}" = "$1" ] && { echo "${e#*|}"; return 0; }
+	done
+	return 1
+}
 # Something already answering on this computer's RPC port that this did not install.
 other_local_node() {
 	[ -f "$UNITS/$NODE_UNIT" ] && return 1
@@ -504,10 +523,39 @@ TEXT
 	done
 }
 
+# Knots was chosen while KNOTS_VER is on UNFIXED_NODE_VERS. Says why, then in
+# a terminal offers Plumb: yes goes on exactly as if plumb had been chosen, no
+# stops. Without a terminal it stops with the same words and the flag that
+# picks Plumb; it never switches on its own. Either stop comes before
+# anything is downloaded or written. It offers PLUMB_VER, so an entry for a
+# flaw that Plumb shares needs PLUMB_VER on the list too (install.sh then
+# stops that).
+knots_offer() {	# $1 = 1 if interactive
+	local f v=${KNOTS_VER%%.knots*} p=${PLUMB_VER##*.} ans
+	f=$(unfixed "$KNOTS_VER")
+	echo
+	echo "Bitcoin Knots $v has a known security flaw, ${f%%|*}: ${f#*|}. This installer does not install a release with a known flaw. Plumb $p does not have this one." | fold -s -w 74 | sed 's/ $//'
+	[ "$1" = 1 ] || die "not installing Bitcoin Knots $v, which has ${f%%|*} (see above). Nothing was downloaded or changed. To install Plumb $p instead, run $(installer_again) with --software plumb."
+	echo
+	while :; do
+		read -e -r -p "Install Plumb $p instead? (yes or no): " ans || die "no answer given"
+		case "${ans,,}" in
+			yes|y) SOFTWARE=plumb; return 0 ;;
+			no|n) break ;;
+		esac
+		echo "  type yes or no"
+	done
+	echo
+	[ "${S_SOFTWARE:-}" != knots ] || echo "The Knots node this installed earlier is left as it is."
+	echo "Nothing was downloaded or changed. To install Plumb $p, run $(installer_again) and choose plumb."
+	exit 1
+}
+
 # Which release a new node gets: Plumb unless the user picks Knots, or the
-# node this installed earlier runs Knots. Sets SOFTWARE and the NODE_*
-# download details. Only install.sh asks (CHOOSE_SOFTWARE=1); configure
-# never downloads a node.
+# node this installed earlier runs Knots. While KNOTS_VER is on
+# UNFIXED_NODE_VERS, choosing Knots offers Plumb in its place (knots_offer).
+# Sets SOFTWARE and the NODE_* download details. Only install.sh asks
+# (CHOOSE_SOFTWARE=1); configure never downloads a node.
 settle_software() {	# $1 = 1 if interactive
 	SOFTWARE=${F_SOFTWARE:-${S_SOFTWARE:-plumb}}
 	if [ "$1" = 1 ]; then
@@ -530,6 +578,7 @@ TEXT
 		echo
 		ask SOFTWARE "plumb or knots" "$SOFTWARE" check_software
 	fi
+	if [ "$SOFTWARE" = knots ] && unfixed "$KNOTS_VER" >/dev/null; then knots_offer "$1"; fi
 	if [ "$SOFTWARE" = plumb ]; then
 		NODE_NAME=Plumb NODE_VER=$PLUMB_VER NODE_BASE=$PLUMB_BASE NODE_FPR=$PLUMB_FPR NODE_KEY_URL=$PLUMB_KEY_URL
 		NODE_SIGNER="Jason Sopko, Plumb release key"

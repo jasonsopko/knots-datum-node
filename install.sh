@@ -107,6 +107,12 @@ load_saved_settings
 CHOOSE_SOFTWARE=1
 settle_settings
 [ "$NODE" != new ] || TARBALL=bitcoin-$NODE_VER-$ARCH.tar.gz
+# Never a node release on UNFIXED_NODE_VERS (lib.sh). Choosing Knots while
+# KNOTS_VER is on it has already stopped or switched to Plumb; this is the
+# last check before anything is written or downloaded.
+if [ "$NODE" = new ] && f=$(unfixed "$NODE_VER"); then
+	die "$NODE_NAME $NODE_VER has a known security flaw, ${f%%|*}: ${f#*|}. This installer does not install a release with a known flaw. Nothing was downloaded or changed. To go on, choose the other node software, or a node you already run."
+fi
 echo
 show_settings
 
