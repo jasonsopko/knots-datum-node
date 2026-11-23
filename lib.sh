@@ -347,12 +347,13 @@ version = sub.strip("/") if has_ua else "unknown version"
 # that breaks it. getnetworkinfo's "version" is the release as
 # 10000 * major + 100 * minor + patch (290403), fixed when the node was
 # built: no setting changes it, and a release candidate has its release's
-# number. Only the user agent says Knots: /Satoshi:29.5.0/Knots:20260508/,
-# where a release candidate has 20260508rc1 and Plumb adds /Plumb:10/.
-# -uacomment adds "(text)" inside the Satoshi part. -uaspoof=1 drops the
-# Knots part and any other -uaspoof value replaces the whole string, so a
-# node with it is refused; when its number would pass, the message says to
-# remove the setting.
+# number. Only the user agent says Knots: /Satoshi:29.5.1/Knots:20260508/,
+# where a release candidate has 20260508rc1, and Plumb adds its release
+# number: /Plumb:15/ for plumb15. -uacomment adds "(text)" inside the
+# Satoshi part. -uaspoof=1 drops the Knots part, and -uaspoof set to a user
+# agent replaces the whole string. A node left with no Knots part is
+# refused; when its number would pass, the message says to remove the
+# setting.
 num = net.get("version")
 knots = [p[6:] for p in version.split("/") if p.startswith("Knots:")]
 new = "run %s and choose new to install Plumb or Knots on this computer" % again
