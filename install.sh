@@ -191,10 +191,14 @@ WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 if [ "$NODE" = new ]; then
 say "downloading $NODE_NAME $NODE_VER"
-# -L: GitHub serves release files through a redirect.
-curl -sSfLO "$NODE_BASE/SHA256SUMS"
-curl -sSfLO "$NODE_BASE/SHA256SUMS.asc"
-curl -sSfLO "$NODE_BASE/$TARBALL"
+# -L: GitHub serves release files through a redirect. A download that moves
+# fewer than 1000 bytes a second for 60 seconds has stalled: curl drops it
+# and starts it over, up to 3 times. If the last try fails too, the install
+# stops there.
+DL=(curl -sSfL --speed-limit 1000 --speed-time 60 --retry 3)
+"${DL[@]}" -O "$NODE_BASE/SHA256SUMS"
+"${DL[@]}" -O "$NODE_BASE/SHA256SUMS.asc"
+"${DL[@]}" -O "$NODE_BASE/$TARBALL"
 # The keys go into a staging keyring first, and only an export of it that
 # drops every subkey carrying the release key's fingerprint reaches the
 # keyring the signature is checked with. Someone holding a stolen release key
@@ -202,7 +206,7 @@ curl -sSfLO "$NODE_BASE/$TARBALL"
 # the real key, that makes gpg check through their certificate, or keep an
 # unrevoked copy of the real key beside the revoked one.
 export GNUPGHOME=$WORK/gnupg; mkdir -m 700 "$GNUPGHOME" "$WORK/stage"
-curl -sSfL "$NODE_KEY_URL" | GNUPGHOME=$WORK/stage gpg -q --import 2>/dev/null || true
+"${DL[@]}" "$NODE_KEY_URL" | GNUPGHOME=$WORK/stage gpg -q --import 2>/dev/null || true
 GNUPGHOME=$WORK/stage gpg -q --keyserver hkps://keys.openpgp.org --recv-keys "$NODE_FPR" 2>/dev/null || true
 GNUPGHOME=$WORK/stage gpg --export --export-filter "drop-subkey=fpr = $NODE_FPR" 2>/dev/null | gpg -q --import 2>/dev/null || true
 GNUPGHOME=$WORK/stage gpgconf --kill all 2>/dev/null || true
