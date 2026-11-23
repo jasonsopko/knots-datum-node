@@ -84,17 +84,21 @@ before building.
 
 ## 3. Node configuration
 
-Make a password for the gateway's login to the node, and the matching
-`rpcauth` line:
-
-    RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-    python3 -c 'import hmac,secrets,sys; s=secrets.token_hex(16); print("gateway:%s$%s" % (s, hmac.new(s.encode(), sys.argv[1].encode(), "sha256").hexdigest()))' "$RPC_PASS"
-    echo "$RPC_PASS"
-
-Write `~/knots-datum-node/conf/bitcoin.conf` from section 3 of the dry run, with
-the printed `gateway:...` value on the `rpcauth=` line, then:
+Write `~/knots-datum-node/conf/bitcoin.conf` from section 3 of the dry run.
+The list of options a real run puts after `### Options` is all comments,
+so you can leave it out. Then:
 
     chmod 600 ~/knots-datum-node/conf/bitcoin.conf
+
+Make a password for the gateway's login to the node, and the matching
+`rpcauth` value for step 5:
+
+    RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+    python3 -c 'import hmac,secrets,sys; s=secrets.token_hex(16); print("gateway:%s$$%s" % (s, hmac.new(s.encode(), sys.argv[1].encode(), "sha256").hexdigest()))' "$RPC_PASS"
+    echo "$RPC_PASS"
+
+The printed `gateway:...` value has `$$` in the middle: that is how the
+`ExecStart` line of a systemd service file writes one `$`.
 
 ## 4. Gateway configuration
 
@@ -107,6 +111,8 @@ protects the gateway's dashboard), then:
 ## 5 and 6. Services
 
 Write the two files in `~/.config/systemd/user/` from sections 5 and 6.
+In the node's file, put the printed `gateway:...` value in place of the
+placeholder after `-rpcauth=` on the `ExecStart` line.
 
 ## 7. Status and configure commands
 

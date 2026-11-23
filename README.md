@@ -296,7 +296,35 @@ As the `miner` user:
 Check the signature as in step 2. The install asks the questions again with
 your current answers as the suggestions, keeps the chain it has already
 downloaded, and restarts with the new version. A node running Knots stays on
-Knots unless you answer `plumb`.
+Knots unless you answer `plumb`. The node's `bitcoin.conf` stays as it is,
+except on the first update from 0.2.12 or earlier (see the next section).
+
+## Your node's own settings
+
+A node this installed reads `~/knots-datum-node/conf/bitcoin.conf`. The
+install writes that file when there is none: notes on the file, the three
+settings it chose (`prune`, `dbcache` and `maxmempool`), then the options
+`bitcoind -help` lists, commented out, each with its help text. The file
+is yours. Running `./install.sh` again, to update or to switch between
+Plumb and Knots, leaves it as it is, as long as its first line is still
+the one the install wrote. After a change, restart the node:
+
+    XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart knots-datum-node-bitcoind
+
+To get a fresh one, rename the file and run `./install.sh` again.
+
+What the gateway needs from the node (`server`, `rpcbind`, `rpcallowip`,
+`rpcauth`, `rpcwhitelist`, `rpcwhitelistdefault` and `blocknotify`) is on
+the node's command line, in
+`~/.config/systemd/user/knots-datum-node-bitcoind.service`, which the
+install writes again each time it runs. Leave those settings out of
+`bitcoin.conf`.
+
+Versions 0.2.12 and earlier wrote `bitcoin.conf` from scratch each time
+they installed or updated the node. The first update from one of them
+renames that file to `bitcoin.conf.<date and time>` in the same folder
+and writes the new one. If you had added lines to the old file, copy them
+into the new one.
 
 ## If something is not working
 
@@ -394,7 +422,8 @@ steps by hand.
 Everything lives in `~/knots-datum-node` and runs as user services of the
 `miner` account, starting again after a reboot.
 
-- For a new node, a pruned Plumb or Bitcoin Knots node.
+- For a new node, a pruned Plumb or Bitcoin Knots node, with its settings
+  in `conf/bitcoin.conf` (see "Your node's own settings").
 - The DATUM gateway, limited by systemd: it cannot gain privileges, run
   unexpected system calls, or use more than 1 GB of memory, and it accepts
   at most 256 miner connections. Its login to the node can make only the

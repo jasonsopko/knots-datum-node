@@ -55,7 +55,7 @@ fi
 if [ "$NODE" = existing ] && [ -f "$UNITS/$NODE_UNIT" ]; then
 	echo "Stopping the node this installed earlier; its data stays in $DATA."
 	user_systemctl disable --now "$NODE_UNIT" 2>/dev/null || true
-	rm -f "$UNITS/$NODE_UNIT" "$CONF/bitcoin.conf"
+	rm -f "$UNITS/$NODE_UNIT"
 fi
 (umask 077; render_gateway_json "$RPC_PASS" "$DASH_PASS" > "$CONF/datum_gateway.json.new")
 mv "$CONF/datum_gateway.json.new" "$CONF/datum_gateway.json"

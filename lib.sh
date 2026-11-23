@@ -829,19 +829,111 @@ show_settings() {
 # Everything the install writes comes from these functions, so --dry-run
 # prints exactly what a real run would put on disk.
 
-render_bitcoin_conf() {	# $1 = rpcauth value
+# bitcoin.conf, for a node this installs, belongs to the user: install.sh
+# writes it only when there is none, and leaves one that starts with this
+# line as it is. Earlier versions wrote a bitcoin.conf without it and
+# rewrote it on every run; install.sh renames such a file and writes a new
+# one. What the gateway needs from the node is on the node's command line
+# instead (gateway_node_args), so the file holds no part of the gateway's
+# login.
+CONF_FIRST_LINE="# knots-datum-node: this bitcoin.conf is yours to edit."
+
+render_bitcoin_conf() {	# $1 = the node's version, as -version gives it; $2 = a file holding its -help, or empty
 	cat <<EOF
-server=1
+$CONF_FIRST_LINE
+#
+# install.sh writes it only when there is none. When it runs again, to
+# update or to switch between Plumb and Knots, it leaves this file as it
+# is. Keep this first line: install.sh renames a bitcoin.conf that does not
+# start with it to bitcoin.conf.<date and time> and writes a new one.
+#
+# A change takes effect when the node restarts:
+#   XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user restart $NODE_UNIT
+#
+# The gateway's settings are on the node's command line, in
+# $UNITS/$NODE_UNIT:
+# server, rpcbind, rpcallowip, rpcauth, rpcwhitelist, rpcwhitelistdefault
+# and blocknotify. Leave those out of this file.
+#
+# The installer set the three lines below. To change one, edit it rather
+# than adding another line for the same setting. After them come the
+# options that bitcoind -help listed when this file was written, for
+#   $1
+# each with its help text, as Knots' contrib/devtools/gen-bitcoin-conf.sh
+# writes them. A line that starts with a # does nothing.
+
 prune=$PRUNE_MB
 dbcache=$DBCACHE
 maxmempool=300
-rpcbind=127.0.0.1
-rpcallowip=127.0.0.1
-rpcauth=$1
-rpcwhitelist=gateway:$RPC_METHODS
-rpcwhitelistdefault=0
-blocknotify=curl -s -m 5 -o /dev/null http://127.0.0.1:$API_PORT/NOTIFY
+
+### Options
 EOF
+	[ -z "$2" ] || help_conf_lines < "$2"
+}
+
+# bitcoind -help turned into commented bitcoin.conf lines: the pipeline of
+# Knots' contrib/devtools/gen-bitcoin-conf.sh, unchanged.
+help_conf_lines() {
+	local -x LC_ALL=C
+	sed '1,/Options:/d' \
+	| sed -E '/^[[:space:]]{2}-help/,/^[[:space:]]*$/d' \
+	| sed -E 's/^[[:space:]]{2}\-/#/' \
+	| sed -E 's/^[[:space:]]{7}/# /' \
+	| sed -E '/[=[:space:]]/!s/#.*$/&=1/' \
+	| awk '/^#[a-z]/{x=$0;next}{if (NF==0) print x"\n",x="";else print}' \
+	| sed 's,\(^[[:upper:]].*\)\:$,\
+### \1,' \
+	| sed 's/[[:space:]]*$//'
+}
+
+# What the gateway needs from a node this installed, one bitcoind argument
+# per line: RPC on this computer only, the gateway's login limited to
+# RPC_METHODS (other logins keep full access), and a call to the gateway
+# when the best block changes. On the command line, a one-value setting
+# (server, rpcwhitelistdefault) wins over bitcoin.conf; the others add to
+# what bitcoin.conf sets.
+gateway_node_args() {	# $1 = rpcauth value
+	echo "-server=1"
+	echo "-rpcbind=127.0.0.1"
+	echo "-rpcallowip=127.0.0.1"
+	echo "-rpcauth=$1"
+	echo "-rpcwhitelist=gateway:$RPC_METHODS"
+	echo "-rpcwhitelistdefault=0"
+	echo "-blocknotify=curl -s -m 5 -o /dev/null http://127.0.0.1:$API_PORT/NOTIFY"
+}
+
+# One argument as systemd reads it on an Exec line: $ and % doubled (each
+# starts an expansion there), and in double quotes when it has a space.
+unit_arg() {
+	local a=${1//\$/\$\$}
+	a=${a//%/%%}
+	[[ "$a" != *" "* ]] || a="\"$a\""
+	printf '%s' "$a"
+}
+
+# The gateway's rpcauth value, if the node unit or a bitcoin.conf an
+# earlier version wrote has one that matches password $1. Kept across
+# reinstalls, so the node unit only changes when something else does.
+saved_rpcauth() {	# $1 = the gateway's password
+	python3 - "$1" "$UNITS/$NODE_UNIT" "$CONF/bitcoin.conf" <<'PY'
+import hmac, re, sys
+pw, unit, conf = sys.argv[1:4]
+found = []
+try:
+	found += [a.replace("$$", "$") for a in re.findall(r"(?<!\S)-rpcauth=(gateway:[0-9a-f]+\$\$[0-9a-f]+)(?!\S)", open(unit).read())]
+except OSError:
+	pass
+try:
+	found += re.findall(r"(?m)^rpcauth=(gateway:[0-9a-f]+\$[0-9a-f]+)$", open(conf).read())
+except OSError:
+	pass
+for a in found:
+	salt, h = a[len("gateway:"):].split("$")
+	if hmac.compare_digest(hmac.new(salt.encode(), pw.encode(), "sha256").hexdigest(), h):
+		print(a)
+		sys.exit(0)
+sys.exit(1)
+PY
 }
 
 render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
@@ -888,13 +980,17 @@ render_gateway_json() {	# $1 = RPC password, $2 = dashboard admin password
 EOF
 }
 
-render_node_unit() {
+render_node_unit() {	# $1 = rpcauth value
+	local a args=
+	while IFS= read -r a; do args+=" $(unit_arg "$a")"; done < <(gateway_node_args "$1")
 	cat <<EOF
 [Unit]
 Description=$NODE_NAME (knots-datum-node)
 
 [Service]
-ExecStart=$BIN/bitcoind -conf=$CONF/bitcoin.conf -datadir=$DATA
+# The settings after -datadir are the gateway's. install.sh rewrites this
+# file on every run; bitcoin.conf is yours.
+ExecStart=$BIN/bitcoind -conf=$CONF/bitcoin.conf -datadir=$DATA$args
 ExecStop=$BIN/bitcoin-cli -conf=$CONF/bitcoin.conf -datadir=$DATA stop
 TimeoutStartSec=600
 TimeoutStopSec=600

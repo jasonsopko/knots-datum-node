@@ -129,6 +129,29 @@ if [ "$NODE" = new ]; then
 	echo "internet data. It deletes old blocks as it goes, so it needs far less disk."
 fi
 
+# Section 3 of the dry run: what a real run does with bitcoin.conf.
+dry_run_bitcoin_conf() {
+	if [ "$NODE" != new ]; then
+		echo "Your node has its own. It needs these lines for the gateway's login (a real"
+		echo "run makes the password and prints them with it):"
+		echo
+		node_conf_lines "$EXT_RPC_USER:<salt>\$<HMAC-SHA256 of the login password>"
+	elif [ -f "$CONF/bitcoin.conf" ] && [ "$(head -n 1 "$CONF/bitcoin.conf")" = "$CONF_FIRST_LINE" ]; then
+		echo "Left as it is: it is there already, and starts with the line this installer"
+		echo "writes first."
+	else
+		if [ -f "$CONF/bitcoin.conf" ]; then
+			echo "The one there now does not start with the line this installer writes first,"
+			echo "so it is renamed to bitcoin.conf.<date and time>. Then this is written:"
+		else
+			echo "There is none yet, so this is written:"
+		fi
+		echo
+		render_bitcoin_conf "v$NODE_VER" ""
+		echo "(then the options bitcoind -help lists, each commented out with its help text)"
+	fi
+}
+
 if [ $DRY_RUN = 1 ]; then
 	PW='<random password, generated at install>'
 	cat <<EOF
@@ -157,13 +180,13 @@ git fetch $GW_REPO $GW_COMMIT
 Builds it and puts datum_gateway in $BIN.
 
 == 3. $CONF/bitcoin.conf (readable by you only)
-$(if [ "$NODE" = new ]; then render_bitcoin_conf "gateway:<salt>\$<HMAC-SHA256 of the password below>"; else echo "Your node has its own. It needs these lines for the gateway's login (a real"; echo "run makes the password and prints them with it):"; echo; node_conf_lines "$EXT_RPC_USER:<salt>\$<HMAC-SHA256 of the login password>"; fi)
+$(dry_run_bitcoin_conf)
 
 == 4. $CONF/datum_gateway.json (readable by you only)
 $(render_gateway_json "$( [ "$NODE" = new ] && echo "$PW" || echo "<the node login password>")" "$PW")
 
 == 5. $UNITS/$NODE_UNIT
-$(if [ "$NODE" = new ]; then render_node_unit; else echo "Skipped: your node runs on its own."; fi)
+$(if [ "$NODE" = new ]; then render_node_unit "gateway:<salt>\$<HMAC-SHA256-of-the-password-in-section-4>"; else echo "Skipped: your node runs on its own."; fi)
 
 == 6. $UNITS/$GW_UNIT
 $(render_gateway_unit)
@@ -240,21 +263,39 @@ install -m 755 build/datum_gateway "$BIN/datum_gateway"
 cd "$WORK"
 
 say "writing configuration"
+OLD_CONF=
 if [ "$NODE" = new ]; then
-	# The gateway's login to the node, kept across reinstalls so the two always
-	# agree. bitcoin.conf is rewritten around it, which brings in any new
-	# settings.
-	OLD_AUTH=
-	[ ! -f "$CONF/bitcoin.conf" ] || OLD_AUTH=$(sed -n 's/^rpcauth=//p' "$CONF/bitcoin.conf" | head -1)
-	if [ -n "$RPC_PASS" ] && [ -n "$OLD_AUTH" ]; then
-		RPC_AUTH=$OLD_AUTH
-	else
+	# The gateway's login to the node, kept across reinstalls while it matches
+	# the saved password, so the two always agree. It goes on the node's
+	# command line (render_node_unit).
+	RPC_AUTH=
+	[ -z "$RPC_PASS" ] || RPC_AUTH=$(saved_rpcauth "$RPC_PASS") || RPC_AUTH=
+	if [ -z "$RPC_AUTH" ]; then
 		RPC_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
 		RPC_AUTH=$(new_rpcauth gateway "$RPC_PASS")
 	fi
-	(umask 077; render_bitcoin_conf "$RPC_AUTH" > "$CONF/bitcoin.conf")
+	# bitcoin.conf is the user's (lib.sh, CONF_FIRST_LINE): written only when
+	# there is none, after renaming one that does not start with that line.
+	if [ -f "$CONF/bitcoin.conf" ] && [ "$(head -n 1 "$CONF/bitcoin.conf")" != "$CONF_FIRST_LINE" ]; then
+		OLD_CONF=$CONF/bitcoin.conf.$(date +%Y%m%d-%H%M%S)
+		mv "$CONF/bitcoin.conf" "$OLD_CONF"
+	fi
+	if [ -f "$CONF/bitcoin.conf" ]; then
+		echo "$CONF/bitcoin.conf is yours: left as it is"
+	else
+		"$BIN/bitcoind" -datadir="$WORK" -help > "$WORK/help.txt"
+		VLINE=$("$BIN/bitcoind" -datadir="$WORK" -version | sed -n 1p)
+		(umask 077; render_bitcoin_conf "${VLINE##* }" "$WORK/help.txt" > "$CONF/bitcoin.conf.new")
+		mv "$CONF/bitcoin.conf.new" "$CONF/bitcoin.conf"
+		echo "wrote $CONF/bitcoin.conf"
+	fi
+	if [ -n "$OLD_CONF" ]; then
+		echo
+		echo "The bitcoin.conf that was there did not start with the line this installer"
+		echo "writes first, so it is now $OLD_CONF."
+		echo "If you added lines of your own to it, copy them into the new one."
+	fi
 else
-	rm -f "$CONF/bitcoin.conf"
 	if [ -f "$UNITS/$NODE_UNIT" ]; then
 		echo "stopping the node this installed earlier; its data stays in $DATA"
 		user_systemctl disable --now "$NODE_UNIT" 2>/dev/null || true
@@ -267,7 +308,7 @@ install -m 644 "$SRC_DIR/lib.sh" "$BASE/lib.sh"
 
 say "starting"
 UNITS_TO_START=("$GW_UNIT")
-if [ "$NODE" = new ]; then render_node_unit > "$UNITS/$NODE_UNIT"; UNITS_TO_START=("$NODE_UNIT" "$GW_UNIT"); fi
+if [ "$NODE" = new ]; then render_node_unit "$RPC_AUTH" > "$UNITS/$NODE_UNIT"; UNITS_TO_START=("$NODE_UNIT" "$GW_UNIT"); fi
 render_gateway_unit > "$UNITS/$GW_UNIT"
 render_status_script > "$BASE/status"
 chmod 755 "$BASE/status"
