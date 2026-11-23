@@ -380,11 +380,20 @@ if found:
 # above that is older than Knots 29.5.1 (290501) lacks the fix, except Plumb
 # from plumb13 on, which carries it on Knots 29.5. Such a node gets a
 # warning, printed after the line that says what was found, and is used as
-# before.
+# before. The warning names Plumb 15 rather than plumb13 and plumb14, which
+# get the next warning.
 plumb = [p[6:] for p in version.split("/") if p.startswith("Plumb:")]
-warn = None
+warn = []
 if num < 290501 and not (plumb and plumb[0].isdigit() and int(plumb[0]) >= 13):
-	warn = "warning: this node lacks the fix for CVE-2026-117348, a flaw that lets another node make it stop handling new blocks and transactions for a while. Plumb plumb13 and plumb14, and Bitcoin Knots 29.5.1, have the fix. The gateway will still use this node; update it when you can."
+	warn.append("warning: this node lacks the fix for CVE-2026-117348, a flaw that lets another node make it stop handling new blocks and transactions for a while. Plumb 15 and Bitcoin Knots 29.5.1 have the fix. The gateway will still use this node; update it when you can.")
+# Plumb 12, 13 and 14 credit a verified signature as a proven key when a
+# witness script pushes one the size of a key, so they accept some
+# transactions that Knots 29.5.1 refuses for carrying more data than
+# -datacarriersize allows. Plumb 15 credits keys only. Such a node gets this
+# warning, after the one above when both apply, and is used as before.
+if plumb and plumb[0] in ("12", "13", "14"):
+	warn.append("warning: this node runs Plumb %s, which accepts some transactions that Bitcoin Knots 29.5.1 refuses. Plumb 15 fixes this. The gateway will still use this node; update it to Plumb 15 when you can." % plumb[0])
+warn = "\n".join(warn)
 gbt = call("getblocktemplate", [{"rules": ["segwit", "blake2b"]}])
 syncing = info.get("initialblockdownload", False)
 if gbt.get("error"):
