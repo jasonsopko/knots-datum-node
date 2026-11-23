@@ -56,6 +56,11 @@ Get Luke Dashjr's release key and check the signature. The output must say
     gpg --keyserver hkps://keys.openpgp.org --recv-keys 1A3E761F19D2CC7785C5502EA291A2C45D0C504A
     gpg --verify SHA256SUMS.asc SHA256SUMS
 
+The list also carries signatures by other keys you have not imported.
+gpg prints `Can't check signature: No public key` for each of those and
+then exits with status 2. That is expected; what counts is the `Good
+signature` line and that fingerprint.
+
 Check the download against the signed list, then put the two programs in
 place:
 
