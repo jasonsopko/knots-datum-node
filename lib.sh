@@ -589,9 +589,8 @@ Which node software?
 
   plumb  Bitcoin Knots with Plumb's spam filters, all turned on, so your
          node leaves more spam out of the blocks it builds and does not
-         pass it on. It follows the same chain as Knots and keeps the same
-         data, so you can switch either way later by running the install
-         again. https://github.com/plumb-node/plumb
+         pass it on. To switch either way later, run the install again.
+         https://github.com/plumb-node/plumb
 
   knots  Bitcoin Knots as released.
 

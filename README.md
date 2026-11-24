@@ -222,9 +222,9 @@ brackets.
 - **Node software.** New node only. `plumb`, the suggestion, installs
   [Plumb](https://github.com/plumb-node/plumb): Bitcoin Knots plus the spam
   filters listed in its README, all turned on, so your node leaves more spam
-  out of the blocks it builds and does not pass it on. It follows the same
-  chain as Knots and keeps the same data, so you can switch either way by
-  running the install again. `knots` installs Bitcoin Knots as released.
+  out of the blocks it builds and does not pass it on. A node on Plumb 15
+  or Knots 29.5.1 can switch to the other by running the install again and
+  keep its chain. `knots` installs Bitcoin Knots as released.
   Plumb's release is built and signed by Jason Sopko, who also signs this
   installer; it is one person's build, not a reproducible one. Knots'
   release is signed by Luke Dashjr. Plumb's ARM build has been tested under
@@ -294,10 +294,11 @@ As the `miner` user:
     ./install.sh
 
 Check the signature as in step 2. The install asks the questions again with
-your current answers as the suggestions, keeps the chain it has already
-downloaded, and restarts with the new version. A node running Knots stays on
-Knots unless you answer `plumb`. The node's `bitcoin.conf` stays as it is,
-except on the first update from 0.2.12 or earlier (see the next section).
+your current answers as the suggestions and restarts with the new version.
+A node on Plumb 14, Plumb 15 or Knots 29.5.1 keeps the chain it has already
+downloaded. A node running Knots stays on Knots unless you answer `plumb`.
+The node's `bitcoin.conf` stays as it is, except on the first update from
+0.2.12 or earlier (see the next section).
 
 ## Your node's own settings
 
