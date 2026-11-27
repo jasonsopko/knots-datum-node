@@ -380,19 +380,27 @@ if found:
 # above that is older than Knots 29.5.1 (290501) lacks the fix, except Plumb
 # from plumb13 on, which carries it on Knots 29.5. Such a node gets a
 # warning, printed after the line that says what was found, and is used as
-# before. The warning names Plumb 15 rather than plumb13 and plumb14, which
-# get the next warning.
+# before. The warning names Plumb 16 rather than plumb13, plumb14 and
+# plumb15, which get the warnings below.
 plumb = [p[6:] for p in version.split("/") if p.startswith("Plumb:")]
 warn = []
 if num < 290501 and not (plumb and plumb[0].isdigit() and int(plumb[0]) >= 13):
-	warn.append("warning: this node lacks the fix for CVE-2026-117348, a flaw that lets another node make it stop handling new blocks and transactions for a while. Plumb 15 and Bitcoin Knots 29.5.1 have the fix. The gateway will still use this node; update it when you can.")
+	warn.append("warning: this node lacks the fix for CVE-2026-117348, a flaw that lets another node make it stop handling new blocks and transactions for a while. Plumb 16 and Bitcoin Knots 29.5.1 have the fix. The gateway will still use this node; update it when you can.")
 # Plumb 12, 13 and 14 credit a verified signature as a proven key when a
 # witness script pushes one the size of a key, so they accept some
 # transactions that Knots 29.5.1 refuses for carrying more data than
-# -datacarriersize allows. Plumb 15 credits keys only. Such a node gets this
-# warning, after the one above when both apply, and is used as before.
+# -datacarriersize allows. Plumb 15 and 16 credit keys only. Such a node gets
+# this warning, after the one above when both apply, and is used as before.
 if plumb and plumb[0] in ("12", "13", "14"):
-	warn.append("warning: this node runs Plumb %s, which accepts some transactions that Bitcoin Knots 29.5.1 refuses. Plumb 15 fixes this. The gateway will still use this node; update it to Plumb 15 when you can." % plumb[0])
+	warn.append("warning: this node runs Plumb %s, which accepts some transactions that Bitcoin Knots 29.5.1 refuses. Plumb 16 fixes this. The gateway will still use this node; update it to Plumb 16 when you can." % plumb[0])
+# Plumb 15's -rejectbpub, as Knots 29.5.1's, reads a BPUB multisig only when
+# it is the whole witness script, so it relays the newer form of BPUB reveal
+# that puts OP_1 OP_EQUAL after the multisig. Plumb 16 carries knots#525,
+# which finds those multisigs anywhere in the script, and refuses it. A
+# Plumb 15 node gets this warning and is used as before. A Knots 29.5.1 node
+# gets none: it runs Knots as released, which this installer also offers.
+if plumb and plumb[0] == "15":
+	warn.append("warning: this node runs Plumb 15, which relays a newer form of BPUB reveal that Plumb 16 refuses. The gateway will still use this node; update it to Plumb 16 when you can.")
 warn = "\n".join(warn)
 gbt = call("getblocktemplate", [{"rules": ["segwit", "blake2b"]}])
 syncing = info.get("initialblockdownload", False)
