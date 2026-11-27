@@ -222,7 +222,7 @@ brackets.
 - **Node software.** New node only. `plumb`, the suggestion, installs
   [Plumb](https://github.com/plumb-node/plumb): Bitcoin Knots plus the spam
   filters listed in its README, all turned on, so your node leaves more spam
-  out of the blocks it builds and does not pass it on. A node on Plumb 15
+  out of the blocks it builds and does not pass it on. A node on Plumb 16
   or Knots 29.5.1 can switch to the other by running the install again and
   keep its chain. `knots` installs Bitcoin Knots as released.
   Plumb's release is built and signed by Jason Sopko, who also signs this
